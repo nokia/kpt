@@ -109,7 +109,7 @@ func normalizeGitFields(u *kptfilev1.Upstream) {
 	}
 }
 
-// normalizeGitLockFields ensures consistent formatting for UpstreamLock git fields
+// normalizeGitLockFields ensures consistent formatting for Locator git fields
 func normalizeGitLockFields(l *kptfilev1.Locator) {
 	if l.Git != nil {
 		// Ensure .git suffix is present

@@ -208,6 +208,7 @@ type GitLock struct {
 	Commit string `yaml:"commit,omitempty" json:"commit,omitempty"`
 }
 
+// GenericLock is a minimal locator for a package stored in a generic storage backend.
 type GenericLock struct {
 	// StoreID is a descriptor of the underlying storage type.
 	// e.g. 'DB' for database

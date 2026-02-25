@@ -25,7 +25,7 @@ import (
 	"github.com/kptdev/kpt/internal/util/update"
 	kptfilev1 "github.com/kptdev/kpt/pkg/api/kptfile/v1"
 	"github.com/kptdev/kpt/pkg/kptfile/kptfileutil"
-	updatetypes "github.com/kptdev/kpt/pkg/lib/update/updatetypes"
+	"github.com/kptdev/kpt/pkg/lib/update/updatetypes"
 	"github.com/kptdev/kpt/pkg/printer"
 	"k8s.io/klog/v2"
 )
@@ -132,14 +132,14 @@ func PkgUpdate(ctx context.Context, ref string, packageDir string, _ PkgUpdateOp
 		// 		return errors.E(op, p.UniquePath, err)
 		// 	}
 
-		// 	if kf.Locator != nil {
+		// 	if kf.UpstreamLock != nil {
 		// 		originDir, err = ioutil.TempDir("", "kpt-get-")
 		// 		if err != nil {
 		// 			return errors.E(op, errors.Internal, fmt.Errorf("error creating temp directory: %w", err))
 		// 		}
 		// 		defer os.RemoveAll(originDir)
 
-		// 		if err = fetch.ClonerUsingOciPull(ctx, kf.Locator.Oci.Image, nil, originDir, options); err != nil {
+		// 		if err = fetch.ClonerUsingOciPull(ctx, kf.UpstreamLock.Oci.Image, nil, originDir, options); err != nil {
 		// 			return errors.E(op, p.UniquePath, err)
 		// 		}
 		// 	} else {

@@ -23,12 +23,10 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${REPO_ROOT}"
 
-make install-swagger
-
-$GOBIN/swagger generate spec -m -w pkg/api/kptfile/v1 -o site/reference/schema/kptfile/kptfile.yaml
-$GOBIN/swagger generate spec -m -w pkg/api/kptfile/v1 -o site/reference/schema/kptfile/kptfile.json
+$GOBIN/swagger generate spec -m -w pkg/api/kptfile/v1 -o documentation/content/en/reference/schema/kptfile/kptfile.yaml
+$GOBIN/swagger generate spec -m -w pkg/api/kptfile/v1 -o documentation/content/en/reference/schema/kptfile/kptfile.json
 
 # We need to add schema header for schema to work in cloud-code.
 # See https://github.com/kptdev/kpt/pull/2520/files/aac23473c121252ec6341fdb2bcce389ae6cb122#r717867089
-jq -s '.[0] * .[1]' scripts/schema-header.json site/reference/schema/kptfile/kptfile.json > /tmp/kptfile-schema.json
-mv /tmp/kptfile-schema.json site/reference/schema/kptfile/kptfile.json
+jq -s '.[0] * .[1]' scripts/schema-header.json documentation/content/en/reference/schema/kptfile/kptfile.json > /tmp/kptfile-schema.json
+mv /tmp/kptfile-schema.json documentation/content/en/reference/schema/kptfile/kptfile.json
