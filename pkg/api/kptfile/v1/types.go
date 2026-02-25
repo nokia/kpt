@@ -186,6 +186,9 @@ type Locator struct {
 	Generic *GenericLock `yaml:"generic,omitempty" json:"generic,omitempty"`
 }
 
+// Deprecated: use `Locator` instead.
+type UpstreamLock = Locator
+
 // GitLock is the resolved locator for a package on Git.
 type GitLock struct {
 	// Repo is the git repository that was fetched.
