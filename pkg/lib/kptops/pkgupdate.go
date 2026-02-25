@@ -132,14 +132,14 @@ func PkgUpdate(ctx context.Context, ref string, packageDir string, _ PkgUpdateOp
 		// 		return errors.E(op, p.UniquePath, err)
 		// 	}
 
-		// 	if kf.UpstreamLock != nil {
+		// 	if kf.Locator != nil {
 		// 		originDir, err = ioutil.TempDir("", "kpt-get-")
 		// 		if err != nil {
 		// 			return errors.E(op, errors.Internal, fmt.Errorf("error creating temp directory: %w", err))
 		// 		}
 		// 		defer os.RemoveAll(originDir)
 
-		// 		if err = fetch.ClonerUsingOciPull(ctx, kf.UpstreamLock.Oci.Image, nil, originDir, options); err != nil {
+		// 		if err = fetch.ClonerUsingOciPull(ctx, kf.Locator.Oci.Image, nil, originDir, options); err != nil {
 		// 			return errors.E(op, p.UniquePath, err)
 		// 		}
 		// 	} else {

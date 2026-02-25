@@ -654,7 +654,7 @@ func replaceData(repo, data string) error {
 			if dataKptfile.Upstream == nil || reflect.DeepEqual(dataKptfile.Upstream, kptfilev1.Upstream{}) {
 				dataKptfile.Upstream = repoKptfile.Upstream
 			}
-			if dataKptfile.UpstreamLock == nil || reflect.DeepEqual(dataKptfile.UpstreamLock, kptfilev1.UpstreamLock{}) {
+			if dataKptfile.UpstreamLock == nil || reflect.DeepEqual(dataKptfile.UpstreamLock, kptfilev1.Locator{}) {
 				dataKptfile.UpstreamLock = repoKptfile.UpstreamLock
 			}
 			dataKptfile.Name = repoKptfile.Name
