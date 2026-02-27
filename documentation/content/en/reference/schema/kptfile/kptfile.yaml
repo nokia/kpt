@@ -18,7 +18,6 @@ definitions:
         type: string
         x-go-package: github.com/kptdev/kpt/pkg/api/kptfile/v1
     Function:
-        description: +kubebuilder:object:generate=true
         properties:
             configMap:
                 additionalProperties:
@@ -290,7 +289,6 @@ definitions:
         type: object
         x-go-package: github.com/kptdev/kpt/pkg/api/kptfile/v1
     Pipeline:
-        description: +kubebuilder:object:generate=true
         properties:
             mutators:
                 description: Mutators defines a list of of KRM functions that mutate resources.
@@ -353,7 +351,6 @@ definitions:
         description: |-
             Selector specifies the selection criteria
             please update IsEmpty method if more properties are added
-            +kubebuilder:object:generate=true
         properties:
             annotations:
                 additionalProperties:

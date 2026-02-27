@@ -212,13 +212,13 @@ type GitLock struct {
 type GenericLock struct {
 	// StoreID is a descriptor of the underlying storage type.
 	// e.g. 'DB' for database
-	StoreID string `yaml:"storeID" json:"storeID"`
+	StoreID string `yaml:"storeID,omitempty" json:"storeID,omitempty"`
 	// ResourceID is a unique identifier of the resource.
 	// The format depends on the underlying storage.
-	ResourceID string `yaml:"resourceID" json:"resourceID"`
+	ResourceID string `yaml:"resourceID,omitempty" json:"resourceID,omitempty"`
 	// ResourceVersion indicates the last fetched version of the resource.
 	// The format depends on the underlying storage.
-	ResourceVersion string `yaml:"resourceVersion" json:"resourceVersion"`
+	ResourceVersion string `yaml:"resourceVersion,omitempty" json:"resourceVersion,omitempty"`
 }
 
 // PackageInfo contains optional information about the package such as license, documentation, etc.

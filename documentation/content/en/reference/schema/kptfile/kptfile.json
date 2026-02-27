@@ -37,7 +37,6 @@
       "x-go-package": "github.com/kptdev/kpt/pkg/api/kptfile/v1"
     },
     "Function": {
-      "description": "+kubebuilder:object:generate=true",
       "type": "object",
       "title": "Function specifies a KRM function.",
       "properties": {
@@ -329,7 +328,6 @@
       "x-go-package": "github.com/kptdev/kpt/pkg/api/kptfile/v1"
     },
     "Pipeline": {
-      "description": "+kubebuilder:object:generate=true",
       "type": "object",
       "title": "Pipeline declares a pipeline of functions used to mutate or validate resources.",
       "properties": {
@@ -406,7 +404,7 @@
       "x-go-package": "sigs.k8s.io/kustomize/kyaml/yaml"
     },
     "Selector": {
-      "description": "Selector specifies the selection criteria\nplease update IsEmpty method if more properties are added\n+kubebuilder:object:generate=true",
+      "description": "Selector specifies the selection criteria\nplease update IsEmpty method if more properties are added",
       "type": "object",
       "properties": {
         "annotations": {
