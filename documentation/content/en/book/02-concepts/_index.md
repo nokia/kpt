@@ -53,8 +53,9 @@ The kpt toolchain includes the following components:
   resource pruning, aggregated status and observability, and an improved preview experience.
 
 - [**Function SDK**](https://github.com/kptdev/krm-functions-sdk): Any general-purpose or domain-specific language can
-  be used to create functions to transform and/or validate the YAML KRM input/output format. However, we provide SDKs to
-  simplify the function authoring process, in [Go]({{% relref "/book/05-developing-functions#developing-in-Go" %}}). 
+  be used to create functions to transform and/or validate the YAML KRM input/output format. However, we provide
+  software development kits (SDKs) to simplify the function authoring process, in
+  [Go](../05-developing-functions/#developing-in-Go). 
 
 - [**Function catalog**](https://catalog.kpt.dev): This is a catalog of off-the-shelf, tested functions. kpt makes
   configurations easy to create and transform, via reusable functions. Because the functions are expected to be used for
@@ -327,6 +328,9 @@ We will discuss how to run functions in [Chapter 4](../04-using-functions), and 
 =======
 We will discuss how to run functions in [Chapter 4]({{% relref "/book/04-using-functions" %}}) and how to develop functions
 in [Chapter 5]({{% relref "/book/05-developing-functions" %}}).
+<<<<<<< HEAD
 >>>>>>> main
 
 
+=======
+>>>>>>> dfe37451e (Chapter 2 proofreading.)
