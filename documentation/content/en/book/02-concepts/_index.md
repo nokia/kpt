@@ -74,7 +74,7 @@ Validation goes hand-in-hand with customization. KRM functions can be used to au
 
 A kpt package is a bundle of configuration _data_. It is represented as a directory tree containing the KRM resources using YAML as the file format.
 
-A package is explicitly declared using a file named `Kptfile`. This file contains a KRM resource of kind `Kptfile`. The Kptfile contains metadata about the package and is simply a regular resource in the YAML format.
+A package is explicitly declared using a file named `Kptfile`. This file contains a KRM resource of type `Kptfile`. The Kptfile contains metadata about the package and is simply a regular resource in the YAML format.
 
 Just as directories can be nested, a package can contain another package. This is called a _subpackage_.
 
@@ -246,10 +246,14 @@ Let us suppose that you have rendered the package, and would like to deploy it t
 - **Observe**: Use the `kpt live status` command.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 First, use the `kpt live apply --dry-run` command to validate the resources in your package and verify that the expected resources will be applied and pruned. If the preview looks good, then apply the package, using the `kpt live apply` command. Afterwards, you may observe the status of the package on the cluster.
 =======
 First, use the kpt `live apply --dry-run` command to validate the resources in your package and verify that the expected resources will be applied and pruned. If the preview looks good, then apply the package, using the `kpt live apply` command. Afterwards, you may observe the status of the package on the cluster.
 >>>>>>> bba110b3d (Proofreading up to kptfile annotations.)
+=======
+First, use the `kpt live apply --dry-run` command to validate the resources in your package and verify that the expected resources will be applied and pruned. If the preview looks good, then apply the package, using the `kpt live apply` command. Afterwards, you may observe the status of the package on the cluster.
+>>>>>>> aa9e252df (Apply suggestions from code review)
 
 Typically, it is best to store the package in Git:
 
