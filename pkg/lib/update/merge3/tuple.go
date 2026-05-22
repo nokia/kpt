@@ -31,15 +31,10 @@ type tuple struct {
 }
 
 // merge performs a 3-way merge on the tuple
-func (t *tuple) merge(opts ...Merge3Option) (*yaml.RNode, error) {
-	options := &Merge3Options{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
+func (t *tuple) merge() (*yaml.RNode, error) {
 	return walk.Walker{
 		// same as in merge3.Merge()
-		Visitor:            &Visitor{KeepTaggedNull: options.KeepTaggedNull},
+		Visitor:            &Visitor{KeepTaggedNull: true},
 		VisitKeysAsScalars: true,
 		Sources:            []*yaml.RNode{t.dest, t.original, t.updated},
 

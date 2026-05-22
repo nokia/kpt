@@ -349,15 +349,15 @@ func compareFiles(src, dst string) (bool, error) {
 }
 
 func collectKubeObjectsFromPackages(localPath, updatedPath, originalPath string) (fn.KubeObjects, fn.KubeObjects, fn.KubeObjects, error) {
-	originalKos, err := loadResourcesFromDirectory(originalPath, "original")
+	originalKos, err := LoadResourcesFromDirectory(originalPath, "original")
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	updatedKos, err := loadResourcesFromDirectory(updatedPath, "updated")
+	updatedKos, err := LoadResourcesFromDirectory(updatedPath, "updated")
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	destinationKos, err := loadResourcesFromDirectory(localPath, "dest")
+	destinationKos, err := LoadResourcesFromDirectory(localPath, "dest")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -385,7 +385,7 @@ func getCrdSchemas(updated fn.KubeObjects, destination fn.KubeObjects) ([]byte, 
 	return marshalledSchemas, nil
 }
 
-func loadResourcesFromDirectory(directoryPath string, mergeSourceAnnotation string) (fn.KubeObjects, error) {
+func LoadResourcesFromDirectory(directoryPath string, mergeSourceAnnotation string) (fn.KubeObjects, error) {
 	exclusions, err := findExclusions(directoryPath)
 	if err != nil {
 		return nil, err

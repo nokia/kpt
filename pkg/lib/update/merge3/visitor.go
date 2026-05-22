@@ -66,6 +66,39 @@ func (v *Visitor) visitAList(nodes walk.Sources, _ *openapi.ResourceSchema) (*ya
 	return nodes.Dest(), nil
 }
 
+func (v *Visitor) VisitScalar(nodes walk.Sources, s *openapi.ResourceSchema) (*yaml.RNode, error) {
+	if !v.KeepTaggedNull && (nodes.Updated().IsTaggedNull() || nodes.Dest().IsTaggedNull()) {
+		// explicitly cleared from either dest or update
+		return nil, nil
+	}
+	if yaml.IsMissingOrNull(nodes.Updated()) != yaml.IsMissingOrNull(nodes.Origin()) {
+		// value added or removed in update
+		return nodes.Updated(), nil
+	}
+	if yaml.IsMissingOrNull(nodes.Updated()) && yaml.IsMissingOrNull(nodes.Origin()) {
+		// value added or removed in update
+		return nodes.Dest(), nil
+	}
+
+	values, err := v.getStrValues(nodes)
+	if err != nil {
+		return nil, err
+	}
+
+	if (values.Dest == "" || values.Dest == values.Origin) && values.Origin != values.Update {
+		// if local is nil or is unchanged but there is new update
+		return nodes.Updated(), nil
+	}
+
+	if nodes.Updated().YNode().Value != nodes.Origin().YNode().Value {
+		// value changed in update
+		return nodes.Updated(), nil
+	}
+
+	// unchanged between origin and update, keep the dest
+	return nodes.Dest(), nil
+}
+
 func (v *Visitor) visitNAList(nodes walk.Sources) (*yaml.RNode, error) {
 	if !v.KeepTaggedNull && (nodes.Updated().IsTaggedNull() || nodes.Dest().IsTaggedNull()) {
 		// explicitly cleared from either dest or update

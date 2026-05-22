@@ -22,19 +22,7 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/openapi"
 )
 
-type Merge3Option func(o *Merge3Options)
-
-type Merge3Options struct {
-	KeepTaggedNull bool
-}
-
-func WithKeepTaggedNull() Merge3Option {
-	return func(o *Merge3Options) {
-		o.KeepTaggedNull = true
-	}
-}
-
-func Merge(original, updated, destination fn.KubeObjects, additionalSchemas []byte, opts ...Merge3Option) (fn.KubeObjects, error) {
+func Merge(original, updated, destination fn.KubeObjects, additionalSchemas []byte) (fn.KubeObjects, error) {
 	if additionalSchemas != nil {
 		if err := openapi.AddSchema(additionalSchemas); err != nil {
 			return nil, pkgerrors.Wrap(err, "error adding schema")
@@ -58,21 +46,21 @@ func Merge(original, updated, destination fn.KubeObjects, additionalSchemas []by
 			return nil, err
 		}
 	}
-	merged, err := MergeTuples(tl, opts...)
+	merged, err := MergeTuples(tl)
 	if err != nil {
 		return nil, err
 	}
 	return fn.MoveToKubeObjects(merged), nil
 }
 
-func MergeTuples(tl tuples, opts ...Merge3Option) (kio.ResourceNodeSlice, error) {
+func MergeTuples(tl tuples) (kio.ResourceNodeSlice, error) {
 	var output kio.ResourceNodeSlice
 	for i := range tl.tuplelist {
 		t := tl.tuplelist[i]
 		strategy := GetHandlingStrategy(t.original, t.updated, t.dest)
 		switch strategy {
 		case filters.Merge:
-			node, err := t.merge(opts...)
+			node, err := t.merge()
 			if err != nil {
 				return nil, err
 			}
