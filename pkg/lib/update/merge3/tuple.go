@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/kio/filters"
 	"sigs.k8s.io/kustomize/kyaml/kio/kioutil"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
-	"sigs.k8s.io/kustomize/kyaml/yaml/merge3"
 	"sigs.k8s.io/kustomize/kyaml/yaml/walk"
 )
 
@@ -32,10 +31,15 @@ type tuple struct {
 }
 
 // merge performs a 3-way merge on the tuple
-func (t *tuple) merge() (*yaml.RNode, error) {
+func (t *tuple) merge(opts ...Merge3Option) (*yaml.RNode, error) {
+	options := &Merge3Options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	return walk.Walker{
 		// same as in merge3.Merge()
-		Visitor:            merge3.Visitor{},
+		Visitor:            &Visitor{KeepTaggedNull: options.KeepTaggedNull},
 		VisitKeysAsScalars: true,
 		Sources:            []*yaml.RNode{t.dest, t.original, t.updated},
 
