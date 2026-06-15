@@ -28,9 +28,9 @@ func TestNotFound(t *testing.T) {
 	fn := &kptfilev1.Function{Image: "foo"}
 	err = &NotFoundError{Function: *fn}
 
-	notFoundErr, ok := errors.AsType[*NotFoundError](err)
-	if !ok {
-		t.Fatalf("expected NotFoundError to satisfy errors.AsType")
+	var notFoundErr *NotFoundError
+	if !errors.As(err, &notFoundErr) {
+		t.Fatalf("expected NotFoundError to satisfy errors.As")
 	}
 
 	if diff := cmp.Diff(notFoundErr.Function, *fn); diff != "" {

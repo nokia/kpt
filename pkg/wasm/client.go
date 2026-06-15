@@ -256,7 +256,8 @@ func isManifestNotFoundErr(err error) bool {
 	if err == nil {
 		return false
 	}
-	terr, isTransportError := errors.AsType[*transport.Error](err)
+	var terr *transport.Error
+	isTransportError := errors.As(err, &terr)
 	if !isTransportError {
 		return false
 	}

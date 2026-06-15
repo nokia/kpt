@@ -187,7 +187,8 @@ func E(args ...any) error {
 		case Class:
 			e.Class = a
 		case *Error:
-			e.Err = new(*a)
+			cp := *a
+			e.Err = &cp
 		case error:
 			e.Err = a
 		case string:
@@ -241,10 +242,11 @@ func As(err error, target any) bool {
 // pipeline. If the error is not wrapped by kio pipeline, it
 // will return the original error.
 func UnwrapKioError(err error) error {
-	if kioErr, ok := goerrors.AsType[*kyaml_errors.Error](err); ok {
-		return kioErr.Err
+	var kioErr *kyaml_errors.Error
+	if !goerrors.As(err, &kioErr) {
+		return err
 	}
-	return err
+	return kioErr.Err
 }
 
 // UnwrapErrors unwraps any *Error errors in the chain and returns

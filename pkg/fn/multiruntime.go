@@ -40,7 +40,8 @@ func (r *MultiRuntime) GetRunner(ctx context.Context, fn *kptfilev1.Function) (F
 	for _, runtime := range r.runtimes {
 		runner, err := runtime.GetRunner(ctx, fn)
 		if err != nil {
-			if _, ok := errors.AsType[*NotFoundError](err); !ok {
+			var notFoundError *NotFoundError
+			if !errors.As(err, &notFoundError) {
 				return nil, err
 			}
 		} else {
