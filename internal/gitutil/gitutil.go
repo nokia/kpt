@@ -39,6 +39,24 @@ import (
 // for remote repos.  Defaults to UserHomeDir/.kpt/repos if unspecified.
 const RepoCacheDirEnv = "KPT_CACHE_DIR"
 
+// ValidateGitArg guards against git argument injection. Values such as refs,
+// tags, refspecs, commit SHAs and repo URIs are frequently attacker-controlled
+// (e.g. read from the upstream block of a remote sub-package's Kptfile) and are
+// passed to git as positional arguments. Git never accepts a ref, refspec,
+// commit, or URI that begins with a dash, so any such value would instead be
+// interpreted as a command-line option (for example `--output=<file>` for
+// `git show`, or `--upload-pack=<cmd>` for `git fetch`). Rejecting values that
+// begin with a dash prevents these option-injection attacks without breaking
+// any legitimate input.
+func ValidateGitArg(kind, value string) error {
+	const op errors.Op = "gitutil.ValidateGitArg"
+	if strings.HasPrefix(value, "-") {
+		return errors.E(op, errors.Git, fmt.Errorf(
+			"invalid git %s %q: must not begin with '-'", kind, value))
+	}
+	return nil
+}
+
 // NewLocalGitRunner returns a new GitLocalRunner for a local package.
 func NewLocalGitRunner(pkg string) (*GitLocalRunner, error) {
 	const op errors.Op = "gitutil.NewLocalGitRunner"
@@ -357,6 +375,21 @@ func (gur *GitUpstreamRepo) getRepoCacheDir() (string, error) {
 // cacheRepo fetches a remote repo to a cache location, and fetches the provided refs.
 func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredRefs []string, optionalRefs []string) (string, error) {
 	const op errors.Op = "gitutil.cacheRepo"
+	// Reject any attacker-controlled value that git would interpret as an
+	// option rather than a URI/ref, preventing argument injection.
+	if err := ValidateGitArg("repo uri", uri); err != nil {
+		return "", errors.E(op, errors.Repo(uri), err)
+	}
+	for _, ref := range requiredRefs {
+		if err := ValidateGitArg("ref", ref); err != nil {
+			return "", errors.E(op, errors.Repo(uri), err)
+		}
+	}
+	for _, ref := range optionalRefs {
+		if err := ValidateGitArg("ref", ref); err != nil {
+			return "", errors.E(op, errors.Repo(uri), err)
+		}
+	}
 	kptCacheDir, err := gur.getRepoCacheDir()
 	if err != nil {
 		return "", errors.E(op, err)

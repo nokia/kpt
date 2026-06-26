@@ -207,6 +207,12 @@ func (c *Cloner) ClonerUsingGitExec(ctx context.Context) error {
 		commit = c.repoSpec.Ref
 	}
 
+	// The commit is derived from an attacker-controlled ref, so make sure git
+	// can't interpret it as a command-line option before passing it positionally.
+	if err := internalgitutil.ValidateGitArg("commit", commit); err != nil {
+		return errors.E(op, errors.Git, errors.Repo(c.repoSpec.CloneSpec()), err)
+	}
+
 	// Reset the local repo to the commit we need. Doing a hard reset instead of
 	// a checkout means we don't create any local branches so we don't need to
 	// worry about fast-forwarding them with changes from upstream. It also makes
