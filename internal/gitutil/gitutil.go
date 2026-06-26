@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,7 +40,15 @@ import (
 // for remote repos.  Defaults to UserHomeDir/.kpt/repos if unspecified.
 const RepoCacheDirEnv = "KPT_CACHE_DIR"
 
-// ValidateGitArg guards against git argument injection. Values such as refs,
+type GitArgKind string
+
+const (
+	GitArgRef     GitArgKind = "reference"
+	GitArgCommit  GitArgKind = "commit"
+	GitArgRepoURI GitArgKind = "repo URI"
+)
+
+// validateGitArg guards against git argument injection. Values such as refs,
 // tags, refspecs, commit SHAs and repo URIs are frequently attacker-controlled
 // (e.g. read from the upstream block of a remote sub-package's Kptfile) and are
 // passed to git as positional arguments. Git never accepts a ref, refspec,
@@ -48,8 +57,8 @@ const RepoCacheDirEnv = "KPT_CACHE_DIR"
 // `git show`, or `--upload-pack=<cmd>` for `git fetch`). Rejecting values that
 // begin with a dash prevents these option-injection attacks without breaking
 // any legitimate input.
-func ValidateGitArg(kind, value string) error {
-	const op errors.Op = "gitutil.ValidateGitArg"
+func validateGitArg(kind GitArgKind, value string) error {
+	const op errors.Op = "gitutil.validateGitArg"
 	if strings.HasPrefix(value, "-") {
 		return errors.E(op, errors.Git, fmt.Errorf(
 			"invalid git %s %q: must not begin with '-'", kind, value))
@@ -157,25 +166,15 @@ func (g *GitLocalRunner) run(ctx context.Context, verbose bool, command string, 
 	}, nil
 }
 
-type NewGitUpstreamRepoOption func(*GitUpstreamRepo)
-
-func WithFetchedRefs(a map[string]bool) NewGitUpstreamRepoOption {
-	return func(g *GitUpstreamRepo) {
-		g.fetchedRefs = a
-	}
-}
-
 // NewGitUpstreamRepo returns a new GitUpstreamRepo for an upstream package.
-func NewGitUpstreamRepo(ctx context.Context, uri string, opts ...NewGitUpstreamRepoOption) (*GitUpstreamRepo, error) {
+func NewGitUpstreamRepo(ctx context.Context, uri string) (GitUpstreamRepo, error) {
 	const op errors.Op = "gitutil.NewGitUpstreamRepo"
-	g := &GitUpstreamRepo{
-		URI: uri,
+	if err := validateGitArg(GitArgRepoURI, uri); err != nil {
+		return nil, errors.E(op, errors.Repo(uri), err)
 	}
-	for _, opt := range opts {
-		opt(g)
-	}
-	if g.fetchedRefs == nil {
-		g.fetchedRefs = map[string]bool{}
+	g := &gitUpstreamRepoBroker{
+		uri:         uri,
+		fetchedRefs: map[string]bool{},
 	}
 	if err := g.updateRefs(ctx); err != nil {
 		return nil, errors.E(op, errors.Repo(uri), err)
@@ -183,57 +182,80 @@ func NewGitUpstreamRepo(ctx context.Context, uri string, opts ...NewGitUpstreamR
 	return g, nil
 }
 
+type GitUpstreamRepo interface {
+	Uri() string
+	Heads() []string
+	Tags() []string
+	GetRepo(ctx context.Context, refs []string) (string, error)
+	GetDefaultBranch(ctx context.Context) (string, error)
+	ResolveBranch(branch string) (string, bool)
+	ResolveTag(tag string) (string, bool)
+	ResolveRef(ref string) string
+}
+
 // GitUpstreamRepo runs git commands in a local git repo.
-type GitUpstreamRepo struct {
-	URI string
+type gitUpstreamRepoBroker struct {
+	uri string
 
-	// Heads contains all head refs in the upstream repo as well as the
-	// each of the are referencing.
-	Heads map[string]string
+	// commitByHead contains all head refs in the upstream repo
+	commitByHead map[string]string
 
-	// Tags contains all tag refs in the upstream repo as well as the
-	// each of the are referencing.
-	Tags map[string]string
+	// commitByTag contains all tag refs in the upstream repo
+	commitByTag map[string]string
 
 	// fetchedRefs keeps track of refs already fetched from remote
 	fetchedRefs map[string]bool
 }
 
-func (gur *GitUpstreamRepo) GetFetchedRefs() []string {
-	fetchedRefs := make([]string, 0, len(gur.fetchedRefs))
-	for ref := range gur.fetchedRefs {
-		fetchedRefs = append(fetchedRefs, ref)
+func (gur *gitUpstreamRepoBroker) Uri() string {
+	return gur.uri
+}
+
+func (gur *gitUpstreamRepoBroker) Heads() []string {
+	heads := make([]string, 0, len(gur.commitByHead))
+	for head := range gur.commitByHead {
+		heads = append(heads, head)
 	}
-	return fetchedRefs
+	sort.Strings(heads)
+	return heads
+}
+
+func (gur *gitUpstreamRepoBroker) Tags() []string {
+	tags := make([]string, 0, len(gur.commitByTag))
+	for tag := range gur.commitByTag {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	return tags
 }
 
 // updateRefs fetches all refs from the upstream git repo, parses the results
 // and caches all refs and the commit they reference. Not that this doesn't
 // download any objects, only refs.
-func (gur *GitUpstreamRepo) updateRefs(ctx context.Context) error {
+func (gur *gitUpstreamRepoBroker) updateRefs(ctx context.Context) error {
 	const op errors.Op = "gitutil.updateRefs"
-	repoCacheDir, err := gur.cacheRepo(ctx, gur.URI, []string{}, []string{})
+	repoCacheDir, err := gur.cacheRepo(ctx, gur.uri, nil)
 	if err != nil {
-		return errors.E(op, errors.Repo(gur.URI), err)
+		return errors.E(op, errors.Repo(gur.uri), err)
 	}
 
 	gitRunner, err := NewLocalGitRunner(repoCacheDir)
 	if err != nil {
-		return errors.E(op, errors.Repo(gur.URI), err)
+		return errors.E(op, errors.Repo(gur.uri), err)
 	}
 
 	rr, err := gitRunner.Run(ctx, "ls-remote", "--heads", "--tags", "--refs", "origin")
 	if err != nil {
 		AmendGitExecError(err, func(e *GitExecError) {
-			e.Repo = gur.URI
+			e.Repo = gur.uri
 		})
 		// TODO: This should only fail if we can't connect to the repo. We should
 		// consider exposing the error message from git to the user here.
-		return errors.E(op, errors.Repo(gur.URI), err)
+		return errors.E(op, errors.Repo(gur.uri), err)
 	}
 
-	heads := make(map[string]string)
-	tags := make(map[string]string)
+	commitByHead := make(map[string]string)
+	commitByTag := make(map[string]string)
 
 	re := regexp.MustCompile(`^([a-z0-9]+)\s+refs/(heads|tags)/(.+)$`)
 	scanner := bufio.NewScanner(bytes.NewBufferString(rr.Stdout))
@@ -243,64 +265,84 @@ func (gur *GitUpstreamRepo) updateRefs(ctx context.Context) error {
 		if len(res) == 0 {
 			continue
 		}
-		switch res[2] {
+		commit := res[1]
+		kind := res[2]
+		name := res[3]
+		switch kind {
 		case "heads":
-			heads[res[3]] = res[1]
+			if err := validateGitArg(GitArgRef, name); err != nil {
+				return errors.E(op, errors.Repo(gur.uri), err)
+			}
+			if err := validateGitArg(GitArgCommit, commit); err != nil {
+				return errors.E(op, errors.Repo(gur.uri), err)
+			}
+			commitByHead[name] = commit
 		case "tags":
-			tags[res[3]] = res[1]
+			if err := validateGitArg(GitArgRef, name); err != nil {
+				return errors.E(op, errors.Repo(gur.uri), err)
+			}
+			if err := validateGitArg(GitArgCommit, commit); err != nil {
+				return errors.E(op, errors.Repo(gur.uri), err)
+			}
+			commitByTag[name] = commit
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return errors.E(op, errors.Repo(gur.URI), errors.Git,
+		return errors.E(op, errors.Repo(gur.uri), errors.Git,
 			fmt.Errorf("error parsing response from git: %w", err))
 	}
-	gur.Heads = heads
-	gur.Tags = tags
+	gur.commitByHead = commitByHead
+	gur.commitByTag = commitByTag
 	return nil
 }
 
 // GetRepo fetches all the provided refs and the objects. It will fetch it
 // to the cache repo and returns the path to the local git clone in the cache
 // directory.
-func (gur *GitUpstreamRepo) GetRepo(ctx context.Context, refs []string) (string, error) {
+func (gur *gitUpstreamRepoBroker) GetRepo(ctx context.Context, refs []string) (string, error) {
 	const op errors.Op = "gitutil.GetRepo"
-	dir, err := gur.cacheRepo(ctx, gur.URI, refs, []string{})
+	for _, ref := range refs {
+		if err := validateGitArg(GitArgRef, ref); err != nil {
+			return "", errors.E(op, errors.Repo(gur.uri), err)
+		}
+	}
+	dir, err := gur.cacheRepo(ctx, gur.uri, refs)
 	if err != nil {
-		return "", errors.E(op, errors.Repo(gur.URI), err)
+		return "", errors.E(op, errors.Repo(gur.uri), err)
 	}
 	return dir, nil
 }
 
 // GetDefaultBranch returns the name of the branch pointed to by the
 // HEAD symref. This is the default branch of the repository.
-func (gur *GitUpstreamRepo) GetDefaultBranch(ctx context.Context) (string, error) {
+func (gur *gitUpstreamRepoBroker) GetDefaultBranch(ctx context.Context) (string, error) {
 	const op errors.Op = "gitutil.GetDefaultBranch"
-	cacheRepo, err := gur.cacheRepo(ctx, gur.URI, []string{}, []string{})
+	cacheRepo, err := gur.cacheRepo(ctx, gur.uri, nil)
 	if err != nil {
-		return "", errors.E(op, errors.Repo(gur.URI), err)
+		return "", errors.E(op, errors.Repo(gur.uri), err)
 	}
 
 	gitRunner, err := NewLocalGitRunner(cacheRepo)
 	if err != nil {
-		return "", errors.E(op, errors.Repo(gur.URI), err)
+		return "", errors.E(op, errors.Repo(gur.uri), err)
 	}
 
 	rr, err := gitRunner.Run(ctx, "ls-remote", "--symref", "origin", "HEAD")
 	if err != nil {
 		AmendGitExecError(err, func(e *GitExecError) {
-			e.Repo = gur.URI
+			e.Repo = gur.uri
 		})
-		return "", errors.E(op, errors.Repo(gur.URI), err)
+		return "", errors.E(op, errors.Repo(gur.uri), err)
 	}
 	if rr.Stdout == "" {
-		return "", errors.E(op, errors.Repo(gur.URI),
+		return "", errors.E(op, errors.Repo(gur.uri),
 			fmt.Errorf("unable to detect default branch in repo"))
 	}
 
 	re := regexp.MustCompile(`ref: refs/heads/([^\s/]+)\s*HEAD`)
 	match := re.FindStringSubmatch(rr.Stdout)
 	if len(match) != 2 {
-		return "", errors.E(op, errors.Repo(gur.URI), errors.Git,
+		return "", errors.E(op, errors.Repo(gur.uri), errors.Git,
 			fmt.Errorf("unexpected response from git when determining default branch: %s", rr.Stdout))
 	}
 	return match[1], nil
@@ -309,43 +351,38 @@ func (gur *GitUpstreamRepo) GetDefaultBranch(ctx context.Context) (string, error
 // ResolveBranch resolves the branch to a commit SHA. This happens based on the
 // cached information about refs in the upstream repo. If the branch doesn't exist
 // in the upstream repo, the last return value will be false.
-func (gur *GitUpstreamRepo) ResolveBranch(branch string) (string, bool) {
+func (gur *gitUpstreamRepoBroker) ResolveBranch(branch string) (string, bool) {
 	branch = strings.TrimPrefix(branch, "refs/heads/")
-	for head, commit := range gur.Heads {
-		if head == branch {
-			return commit, true
-		}
-	}
-	return "", false
+	commit, ok := gur.commitByHead[branch]
+	return commit, ok
 }
 
 // ResolveTag resolves the tag to a commit SHA. This happens based on the
 // cached information about refs in the upstream repo. If the tag doesn't exist
 // in the upstream repo, the last return value will be false.
-func (gur *GitUpstreamRepo) ResolveTag(tag string) (string, bool) {
+func (gur *gitUpstreamRepoBroker) ResolveTag(tag string) (string, bool) {
 	tag = strings.TrimPrefix(tag, "refs/tags/")
-	for t, commit := range gur.Tags {
-		if t == tag {
-			return commit, true
-		}
-	}
-	return "", false
+	commit, ok := gur.commitByTag[tag]
+	return commit, ok
 }
 
 // ResolveRef resolves the ref (either tag or branch) to a commit SHA. If the
 // ref doesn't exist in the upstream repo, the last return value will be false.
-func (gur *GitUpstreamRepo) ResolveRef(ref string) (string, bool) {
-	commit, found := gur.ResolveBranch(ref)
-	if found {
-		return commit, true
+func (gur *gitUpstreamRepoBroker) ResolveRef(ref string) string {
+	if commit, found := gur.ResolveBranch(ref); found {
+		return commit
 	}
-	return gur.ResolveTag(ref)
+	if commit, found := gur.ResolveTag(ref); found {
+		return commit
+	}
+
+	return ref
 }
 
 // getRepoDir returns the cache directory name for a remote repo
 // This takes the md5 hash of the repo uri and then base32 (or hex for Windows to shorten dir)
 // encodes it to make sure it doesn't contain characters that isn't legal in directory names.
-func (gur *GitUpstreamRepo) getRepoDir(uri string) string {
+func (gur *gitUpstreamRepoBroker) getRepoDir(uri string) string {
 	if runtime.GOOS == "windows" {
 		var hash = md5.Sum([]byte(uri))
 		return strings.ToLower(hex.EncodeToString(hash[:]))
@@ -355,7 +392,7 @@ func (gur *GitUpstreamRepo) getRepoDir(uri string) string {
 }
 
 // getRepoCacheDir
-func (gur *GitUpstreamRepo) getRepoCacheDir() (string, error) {
+func (gur *gitUpstreamRepoBroker) getRepoCacheDir() (string, error) {
 	const op errors.Op = "gitutil.getRepoCacheDir"
 	var err error
 	dir := os.Getenv(RepoCacheDirEnv)
@@ -373,20 +410,12 @@ func (gur *GitUpstreamRepo) getRepoCacheDir() (string, error) {
 }
 
 // cacheRepo fetches a remote repo to a cache location, and fetches the provided refs.
-func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredRefs []string, optionalRefs []string) (string, error) {
+func (gur *gitUpstreamRepoBroker) cacheRepo(ctx context.Context, uri string, requiredRefs []string) (string, error) {
 	const op errors.Op = "gitutil.cacheRepo"
 	// Reject any attacker-controlled value that git would interpret as an
 	// option rather than a URI/ref, preventing argument injection.
-	if err := ValidateGitArg("repo uri", uri); err != nil {
-		return "", errors.E(op, errors.Repo(uri), err)
-	}
 	for _, ref := range requiredRefs {
-		if err := ValidateGitArg("ref", ref); err != nil {
-			return "", errors.E(op, errors.Repo(uri), err)
-		}
-	}
-	for _, ref := range optionalRefs {
-		if err := ValidateGitArg("ref", ref); err != nil {
+		if err := validateGitArg(GitArgRef, ref); err != nil {
 			return "", errors.E(op, errors.Repo(uri), err)
 		}
 	}
@@ -424,7 +453,6 @@ func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredR
 		gitRunner.Dir = repoCacheDir
 	}
 
-loop:
 	for i := range requiredRefs {
 		s := requiredRefs[i]
 		// Check if we can verify the ref. This will output a full commit sha if
@@ -437,7 +465,7 @@ loop:
 		// If the output is the same as the ref, then the ref was already a full
 		// commit sha.
 		validFullSha := s == strings.TrimSpace(rr.Stdout)
-		_, resolved := gur.ResolveRef(s)
+		resolved := gur.ResolveRef(s) != s
 		// check if ref was previously fetched
 		// we use the ref s as the cache key
 		_, fetched := gur.fetchedRefs[s]
@@ -478,21 +506,9 @@ loop:
 					"error verifying results from fetch: %w", err))
 			}
 			gur.fetchedRefs[s] = true
-			// If we did a full fetch, we already have all refs, so we can just
-			// exit the loop.
-			break loop
+			return repoCacheDir, nil
 		}
 	}
 
-	var found bool
-	for _, s := range optionalRefs {
-		if _, err := gitRunner.Run(ctx, "fetch", "origin", s); err == nil {
-			found = true
-		}
-	}
-	if !found && len(optionalRefs) > 0 {
-		return "", errors.E(op, errors.Git, fmt.Errorf("unable to find any refs %s",
-			strings.Join(optionalRefs, ",")))
-	}
 	return repoCacheDir, nil
 }

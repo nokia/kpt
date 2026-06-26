@@ -87,7 +87,7 @@ func TestCommand_Run_noRefChanges(t *testing.T) {
 			cachedGURs := cmd.GetCachedUpstreamRepos()
 			assert.Equal(t, 1, len(cachedGURs))
 			for _, gur := range cachedGURs {
-				assert.Equal(t, upstreamRepo.RepoDirectory, gur.URI)
+				assert.Equal(t, upstreamRepo.RepoDirectory, gur.Uri())
 				// Expect two fetched refs
 				// 1 for upstream ref (master) and 1 for previous upstream lock
 				assert.ElementsMatch(t, []string{masterBranch, upstreamRepo.Commits[0]}, gur.GetFetchedRefs())

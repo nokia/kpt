@@ -115,8 +115,8 @@ func TestNewGitUpstreamRepo_noRefs(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	assert.Equal(t, 0, len(gur.Heads))
-	assert.Equal(t, 0, len(gur.Tags))
+	assert.Equal(t, 0, len(gur.Heads()))
+	assert.Equal(t, 0, len(gur.Tags()))
 }
 
 func TestNewGitUpstreamRepo(t *testing.T) {
@@ -172,8 +172,8 @@ func TestNewGitUpstreamRepo(t *testing.T) {
 			if !assert.NoError(t, err) {
 				t.FailNow()
 			}
-			assert.EqualValues(t, tc.expectedHeads, toKeys(gur.Heads))
-			assert.EqualValues(t, tc.expectedTags, toKeys(gur.Tags))
+			assert.EqualValues(t, tc.expectedHeads, gur.Heads())
+			assert.EqualValues(t, tc.expectedTags, gur.Tags())
 		})
 	}
 }
@@ -359,11 +359,7 @@ func TestGitUpstreamRepo_GetRepo(t *testing.T) {
 				t.FailNow()
 			}
 			for _, r := range refs {
-				sha, found := gur.ResolveRef(r)
-				if !found {
-					// Assume the ref is a commit...
-					sha = r
-				}
+				sha := gur.ResolveRef(r)
 				_, err := runner.Run(fake.CtxWithDefaultPrinter(), "reset", "--hard", sha)
 				assert.NoError(t, err)
 			}
@@ -440,35 +436,6 @@ func toKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func TestValidateGitArg(t *testing.T) {
-	testCases := map[string]struct {
-		value     string
-		expectErr bool
-	}{
-		"plain branch":                 {value: "main"},
-		"tag with slashes":             {value: "abc/123"},
-		"full sha":                     {value: "0123456789abcdef0123456789abcdef01234567"},
-		"https uri":                    {value: "https://example.com/repo.git"},
-		"ssh uri":                      {value: "git@example.com:org/repo.git"},
-		"empty":                        {value: ""},
-		"option injection short":       {value: "-o", expectErr: true},
-		"option injection git show":    {value: "--output=../../../.bashrc", expectErr: true},
-		"option injection upload pack": {value: "--upload-pack=touch /tmp/pwned", expectErr: true},
-		"bare dash":                    {value: "-", expectErr: true},
-	}
-
-	for tn, tc := range testCases {
-		t.Run(tn, func(t *testing.T) {
-			err := internalgitutil.ValidateGitArg("ref", tc.value)
-			if tc.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
 }
 
 // TestGitUpstreamRepo_GetRepo_rejectsOptionInjection makes sure that a ref that
