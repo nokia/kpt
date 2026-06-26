@@ -115,8 +115,8 @@ func TestNewGitUpstreamRepo_noRefs(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	assert.Equal(t, 0, len(gur.Heads))
-	assert.Equal(t, 0, len(gur.Tags))
+	assert.Equal(t, 0, len(gur.Heads()))
+	assert.Equal(t, 0, len(gur.Tags()))
 }
 
 func TestNewGitUpstreamRepo(t *testing.T) {
@@ -172,8 +172,8 @@ func TestNewGitUpstreamRepo(t *testing.T) {
 			if !assert.NoError(t, err) {
 				t.FailNow()
 			}
-			assert.EqualValues(t, tc.expectedHeads, toKeys(gur.Heads))
-			assert.EqualValues(t, tc.expectedTags, toKeys(gur.Tags))
+			assert.EqualValues(t, tc.expectedHeads, gur.Heads())
+			assert.EqualValues(t, tc.expectedTags, gur.Tags())
 		})
 	}
 }
@@ -359,11 +359,7 @@ func TestGitUpstreamRepo_GetRepo(t *testing.T) {
 				t.FailNow()
 			}
 			for _, r := range refs {
-				sha, found := gur.ResolveRef(r)
-				if !found {
-					// Assume the ref is a commit...
-					sha = r
-				}
+				sha := gur.ResolveRef(r)
 				_, err := runner.Run(fake.CtxWithDefaultPrinter(), "reset", "--hard", sha)
 				assert.NoError(t, err)
 			}
@@ -440,4 +436,33 @@ func toKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// TestGitUpstreamRepo_GetRepo_rejectsOptionInjection makes sure that a ref that
+// git would interpret as a command-line option (e.g. one read from an
+// attacker-controlled remote sub-package Kptfile) is rejected rather than
+// passed to git, preventing argument injection.
+func TestGitUpstreamRepo_GetRepo_rejectsOptionInjection(t *testing.T) {
+	repoContent := map[string][]testutil.Content{
+		testutil.Upstream: {
+			{
+				Pkg: pkgbuilder.NewRootPkg().
+					WithResource(pkgbuilder.DeploymentResource),
+				Branch: "main",
+			},
+		},
+	}
+	g, _, clean := testutil.SetupReposAndWorkspace(t, repoContent)
+	defer clean()
+
+	gur, err := internalgitutil.NewGitUpstreamRepo(fake.CtxWithDefaultPrinter(), g[testutil.Upstream].RepoDirectory)
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+
+	_, err = gur.GetRepo(fake.CtxWithDefaultPrinter(), []string{"--output=../../../.bashrc"})
+	if !assert.Error(t, err) {
+		t.FailNow()
+	}
+	assert.Contains(t, err.Error(), "must not begin with '-'")
 }
