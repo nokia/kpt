@@ -1,0 +1,23 @@
+internal/gitutil/gitutil.go
+  s_35a6f22502cdd8::t_e753a3fbd24317 489-492,494-497,514,534
+  s_35a6f22502cdd8::t_a82dd9d42b6077 241,243,321-328
+  s_35a6f22502cdd8::t_46d236c2716d79 209-211
+  s_35a6f22502cdd8::t_d626c400a8aee4 238-240
+  s_35a6f22502cdd8::t_aa05f4ad2fc0b8 242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "a155a1cd2ca4c7784a41177cc16c157485606b59",
+  "prompts": {},
+  "sessions": {
+    "s_35a6f22502cdd8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "989da4e7-3b5d-4ed1-af86-95f6b7794613",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
