@@ -1,0 +1,14 @@
+internal/gitutil/gitutil.go
+  h_370c0852e807ff 31,73-111,121,129,137,140-144,173-174,251,314,374,377,380,404-427,443,445,452,463-464,471,486,499,507,523-524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "f63be9334b1f432057a0042c137f92b886e03a51",
+  "prompts": {},
+  "humans": {
+    "h_370c0852e807ff": {
+      "author": "Mózes László Máté <laszlo.mozes@nokia.com>"
+    }
+  }
+}
