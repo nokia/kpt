@@ -1,0 +1,38 @@
+internal/gitutil/gitutil.go
+  s_35a6f22502cdd8::t_46d236c2716d79 195-197
+  s_35a6f22502cdd8::t_a82dd9d42b6077 67,188,218,224,234,286,298-299,303,347,374,394,440,455,467,486,490,494
+  s_35a6f22502cdd8::t_1dca2744c170e0 236
+  s_35a6f22502cdd8::t_7f1eac8055e923 64-66
+  s_35a6f22502cdd8::t_0c0367b2e6b650 68-70
+  s_35a6f22502cdd8::t_bc3fdaf90534df 187
+  s_35a6f22502cdd8::t_19a012ad8e7160 189-194
+  s_35a6f22502cdd8::t_1c4d49f83ee69d 215-217
+  s_35a6f22502cdd8::t_4b5175d96a39aa 219-223
+  s_35a6f22502cdd8::t_4dc47f71198121 225-227,231-233
+  s_35a6f22502cdd8::t_75453df48db32e 235
+  s_35a6f22502cdd8::t_c1752a1654b6ba 285
+  s_35a6f22502cdd8::t_c8d0693e74b1d5 287-289
+  s_35a6f22502cdd8::t_86d4d607c8cf7f 295-297
+  s_35a6f22502cdd8::t_d59ef40a297573 391-393
+  s_35a6f22502cdd8::t_2d1549d0c75170 395-396
+  s_35a6f22502cdd8::t_f855dfbf503120 437-439
+  s_35a6f22502cdd8::t_d1c0aec15d4430 487-489
+  s_35a6f22502cdd8::t_74b36b22cbc7c9 491-493
+  s_35a6f22502cdd8::t_3bab7eac2e334d 495-497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "62648823521f3aa2b4fc6165f8ab83017bd735c7",
+  "prompts": {},
+  "sessions": {
+    "s_35a6f22502cdd8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "989da4e7-3b5d-4ed1-af86-95f6b7794613",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
