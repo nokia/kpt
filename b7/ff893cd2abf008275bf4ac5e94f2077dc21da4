@@ -1,0 +1,46 @@
+internal/gitutil/gitutil.go
+  s_35a6f22502cdd8::t_0c0367b2e6b650 68-70
+  s_35a6f22502cdd8::t_4b5175d96a39aa 206-209
+  s_35a6f22502cdd8::t_c1752a1654b6ba 262
+  s_35a6f22502cdd8::t_a82dd9d42b6077 67,188,190,204,210,218,224,234,280-283,285-291,293-299,303,306-307,314,316-325,386,392,436,455,467,486,488,512
+  s_35a6f22502cdd8::t_1c4d49f83ee69d 201,203
+  s_35a6f22502cdd8::t_7f1eac8055e923 64-66
+  s_35a6f22502cdd8::t_19a012ad8e7160 177-179
+  s_35a6f22502cdd8::t_4dc47f71198121 211,529
+  s_35a6f22502cdd8::t_f855dfbf503120 415
+  s_35a6f22502cdd8::t_c8d0693e74b1d5 266
+  s_35a6f22502cdd8::t_dd4072f7312ab7 61-63
+  s_35a6f22502cdd8::t_dc467a0f8057fa 187
+  s_35a6f22502cdd8::t_5f756eacc9e9ea 189
+  s_35a6f22502cdd8::t_6f9ab0dad9da8f 191-193
+  s_35a6f22502cdd8::t_5a91ac53c5a734 199-200
+  s_35a6f22502cdd8::t_418929215d3946 215-217
+  s_35a6f22502cdd8::t_ec632b6fa2126e 219-223
+  s_35a6f22502cdd8::t_651249cb1734ce 225-227,231-233
+  s_35a6f22502cdd8::t_092326f3c8e320 235-236
+  s_35a6f22502cdd8::t_49d3ca8ce6f9cc 326-328
+  s_35a6f22502cdd8::t_b12ba469cbfd14 385
+  s_35a6f22502cdd8::t_dc623f0b53d2bb 391
+  s_35a6f22502cdd8::t_08b39e4da55234 393-395
+  s_35a6f22502cdd8::t_f1621f575d703c 435
+  s_35a6f22502cdd8::t_5ac7c1842bd288 437-439
+  s_35a6f22502cdd8::t_94b0199df2d18b 487
+  s_35a6f22502cdd8::t_0363afee72a281 489-491
+  s_35a6f22502cdd8::t_a07b45249505eb 528
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "b7ff893cd2abf008275bf4ac5e94f2077dc21da4",
+  "prompts": {},
+  "sessions": {
+    "s_35a6f22502cdd8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "989da4e7-3b5d-4ed1-af86-95f6b7794613",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
