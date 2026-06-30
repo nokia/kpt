@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,6 +70,45 @@ type GitLocalRunner struct {
 	Debug bool
 }
 
+type validatedGitArg struct {
+	string
+}
+
+var bypassAllowed = []string{
+	"show",
+	"init",
+	"remote",
+	"add",
+	"ls-remote",
+	"rev-parse",
+	"fetch",
+	"origin",
+	"HEAD",
+	"--heads",
+	"--tags",
+	"--refs",
+	"--symref",
+	"--verify",
+	"-q",
+	"--depth=1",
+}
+
+// v bypasses the validation, but is only allowed for the above selection of strings
+func v(str string) validatedGitArg {
+	if !slices.Contains(bypassAllowed, str) {
+		panic(fmt.Sprintf("cannot bypass validation for %s", str))
+	}
+	return validatedGitArg{str}
+}
+
+func validateGitArg(value string) (validatedGitArg, error) {
+	const op errors.Op = "gitutil.validateGitArg"
+	if strings.HasPrefix(value, "-") {
+		return validatedGitArg{}, errors.E(op, errors.Git, fmt.Errorf("invalid argument for git command: %q must not begin with '-'", value))
+	}
+	return validatedGitArg{value}, nil
+}
+
 type RunResult struct {
 	Stdout string
 	Stderr string
@@ -78,26 +118,30 @@ type RunResult struct {
 // Omit the 'git' part of the command.
 // The first return value contains the output to Stdout and Stderr when
 // running the command.
-func (g *GitLocalRunner) Run(ctx context.Context, command string, args ...string) (RunResult, error) {
-	return g.run(ctx, false, command, args...)
+func (g *GitLocalRunner) Run(ctx context.Context, args ...validatedGitArg) (RunResult, error) {
+	return g.run(ctx, false, args...)
 }
 
 // RunVerbose runs a git command.
 // Omit the 'git' part of the command.
 // The first return value contains the output to Stdout and Stderr when
 // running the command.
-func (g *GitLocalRunner) RunVerbose(ctx context.Context, command string, args ...string) (RunResult, error) {
-	return g.run(ctx, true, command, args...)
+func (g *GitLocalRunner) RunVerbose(ctx context.Context, args ...validatedGitArg) (RunResult, error) {
+	return g.run(ctx, true, args...)
 }
 
 // run runs a git command.
 // Omit the 'git' part of the command.
 // The first return value contains the output to Stdout and Stderr when
 // running the command.
-func (g *GitLocalRunner) run(ctx context.Context, verbose bool, command string, args ...string) (RunResult, error) {
+func (g *GitLocalRunner) run(ctx context.Context, verbose bool, args ...validatedGitArg) (RunResult, error) {
 	const op errors.Op = "gitutil.run"
 
-	fullArgs := append([]string{command}, args...)
+	var fullArgs []string
+	for _, arg := range args {
+		fullArgs = append(fullArgs, arg.string)
+	}
+
 	cmd := exec.CommandContext(ctx, g.gitPath, fullArgs...)
 	cmd.Dir = g.Dir
 	// Disable git prompting the user for credentials.
@@ -126,8 +170,8 @@ func (g *GitLocalRunner) run(ctx context.Context, verbose bool, command string, 
 	if err != nil {
 		return RunResult{}, errors.E(op, errors.Git, &GitExecError{
 			Type:    determineErrorType(cmdStderr.String()),
-			Args:    args,
-			Command: command,
+			Args:    fullArgs[1:],
+			Command: fullArgs[0],
 			Err:     err,
 			StdOut:  cmdStdout.String(),
 			StdErr:  cmdStderr.String(),
@@ -204,7 +248,7 @@ func (gur *GitUpstreamRepo) updateRefs(ctx context.Context) error {
 		return errors.E(op, errors.Repo(gur.URI), err)
 	}
 
-	rr, err := gitRunner.Run(ctx, "ls-remote", "--heads", "--tags", "--refs", "origin")
+	rr, err := gitRunner.Run(ctx, v("ls-remote"), v("--heads"), v("--tags"), v("--refs"), v("origin"))
 	if err != nil {
 		AmendGitExecError(err, func(e *GitExecError) {
 			e.Repo = gur.URI
@@ -267,7 +311,7 @@ func (gur *GitUpstreamRepo) GetDefaultBranch(ctx context.Context) (string, error
 		return "", errors.E(op, errors.Repo(gur.URI), err)
 	}
 
-	rr, err := gitRunner.Run(ctx, "ls-remote", "--symref", "origin", "HEAD")
+	rr, err := gitRunner.Run(ctx, v("ls-remote"), v("--symref"), v("origin"), v("HEAD"))
 	if err != nil {
 		AmendGitExecError(err, func(e *GitExecError) {
 			e.Repo = gur.URI
@@ -327,13 +371,13 @@ func (gur *GitUpstreamRepo) ResolveRef(ref string) (string, bool) {
 // getRepoDir returns the cache directory name for a remote repo
 // This takes the md5 hash of the repo uri and then base32 (or hex for Windows to shorten dir)
 // encodes it to make sure it doesn't contain characters that isn't legal in directory names.
-func (gur *GitUpstreamRepo) getRepoDir(uri string) string {
+func (gur *GitUpstreamRepo) getRepoDir(uri string) validatedGitArg {
 	if runtime.GOOS == "windows" {
 		var hash = md5.Sum([]byte(uri))
-		return strings.ToLower(hex.EncodeToString(hash[:]))
+		return validatedGitArg{strings.ToLower(hex.EncodeToString(hash[:]))}
 	}
 	sum := md5.Sum([]byte(uri))
-	return strings.ToLower(base32.StdEncoding.EncodeToString(sum[:]))
+	return validatedGitArg{strings.ToLower(base32.StdEncoding.EncodeToString(sum[:]))}
 }
 
 // getRepoCacheDir
@@ -357,6 +401,30 @@ func (gur *GitUpstreamRepo) getRepoCacheDir() (string, error) {
 // cacheRepo fetches a remote repo to a cache location, and fetches the provided refs.
 func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredRefs []string, optionalRefs []string) (string, error) {
 	const op errors.Op = "gitutil.cacheRepo"
+
+	vUri, err := validateGitArg(uri)
+	if err != nil {
+		return "", errors.E(op, errors.IO, err)
+	}
+
+	var vReqRefs, vOptRefs []validatedGitArg
+
+	for _, ref := range requiredRefs {
+		if vref, err := validateGitArg(ref); err != nil {
+			return "", errors.E(op, errors.Repo(uri), err)
+		} else {
+			vReqRefs = append(vReqRefs, vref)
+		}
+	}
+
+	for _, ref := range optionalRefs {
+		if vref, err := validateGitArg(ref); err != nil {
+			return "", errors.E(op, errors.Repo(uri), err)
+		} else {
+			vOptRefs = append(vOptRefs, vref)
+		}
+	}
+
 	kptCacheDir, err := gur.getRepoCacheDir()
 	if err != nil {
 		return "", errors.E(op, err)
@@ -372,16 +440,16 @@ func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredR
 		return "", errors.E(op, errors.Repo(uri), err)
 	}
 	uriSha := gur.getRepoDir(uri)
-	repoCacheDir := filepath.Join(kptCacheDir, uriSha)
+	repoCacheDir := filepath.Join(kptCacheDir, uriSha.string)
 	if _, err := os.Stat(repoCacheDir); os.IsNotExist(err) {
-		if _, err := gitRunner.Run(ctx, "init", uriSha); err != nil {
+		if _, err := gitRunner.Run(ctx, v("init"), uriSha); err != nil {
 			AmendGitExecError(err, func(e *GitExecError) {
 				e.Repo = uri
 			})
 			return "", errors.E(op, errors.Git, fmt.Errorf("error running `git init`: %w", err))
 		}
 		gitRunner.Dir = repoCacheDir
-		if _, err = gitRunner.Run(ctx, "remote", "add", "origin", uri); err != nil {
+		if _, err = gitRunner.Run(ctx, v("remote"), v("add"), v("origin"), vUri); err != nil {
 			AmendGitExecError(err, func(e *GitExecError) {
 				e.Repo = uri
 			})
@@ -392,15 +460,15 @@ func (gur *GitUpstreamRepo) cacheRepo(ctx context.Context, uri string, requiredR
 	}
 
 loop:
-	for i := range requiredRefs {
-		s := requiredRefs[i]
+	for i, s := range requiredRefs {
+		vs := vReqRefs[i]
 		// Check if we can verify the ref. This will output a full commit sha if
 		// either the ref (short commit, tag, branch) can be resolved to a full
 		// commit sha, or if the provided ref is already a valid full commit sha (note
 		// that this will happen even if the commit doesn't exist in the local repo).
 		// We ignore the error here since an error just means the ref didn't exist,
 		// which we detect by checking the output to stdout.
-		rr, _ := gitRunner.Run(ctx, "rev-parse", "--verify", "-q", s)
+		rr, _ := gitRunner.Run(ctx, v("rev-parse"), v("--verify"), v("-q"), vs)
 		// If the output is the same as the ref, then the ref was already a full
 		// commit sha.
 		validFullSha := s == strings.TrimSpace(rr.Stdout)
@@ -415,7 +483,7 @@ loop:
 		case resolved || validFullSha:
 			// If the ref references a branch or a tag, or is a valid commit
 			// sha and has not already been fetched, we can fetch just a single commit.
-			if _, err := gitRunner.RunVerbose(ctx, "fetch", "origin", "--depth=1", s); err != nil {
+			if _, err := gitRunner.RunVerbose(ctx, v("fetch"), v("origin"), v("--depth=1"), vs); err != nil {
 				AmendGitExecError(err, func(e *GitExecError) {
 					e.Repo = uri
 					e.Command = "fetch"
@@ -428,7 +496,7 @@ loop:
 		default:
 			// In other situations (like a short commit sha), we have to do
 			// a full fetch from the remote.
-			if _, err := gitRunner.RunVerbose(ctx, "fetch", "origin"); err != nil {
+			if _, err := gitRunner.RunVerbose(ctx, v("fetch"), v("origin")); err != nil {
 				AmendGitExecError(err, func(e *GitExecError) {
 					e.Repo = uri
 					e.Command = "fetch"
@@ -436,7 +504,7 @@ loop:
 				return "", errors.E(op, errors.Git, fmt.Errorf(
 					"error running `git fetch` for origin: %w", err))
 			}
-			if _, err = gitRunner.Run(ctx, "show", s); err != nil {
+			if _, err = gitRunner.Run(ctx, v("show"), vs); err != nil {
 				AmendGitExecError(err, func(e *GitExecError) {
 					e.Repo = uri
 					e.Ref = s
@@ -452,8 +520,8 @@ loop:
 	}
 
 	var found bool
-	for _, s := range optionalRefs {
-		if _, err := gitRunner.Run(ctx, "fetch", "origin", s); err == nil {
+	for _, vs := range vOptRefs {
+		if _, err := gitRunner.Run(ctx, v("fetch"), v("origin"), vs); err == nil {
 			found = true
 		}
 	}
