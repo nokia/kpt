@@ -1,0 +1,19 @@
+internal/gitutil/gitutil_test.go
+  s_8b68ad70a434e3::t_49832a4ff36be2 463-669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "c1f6b45f15146c3f799ccddf38ec0b9c11bcf509",
+  "prompts": {},
+  "sessions": {
+    "s_8b68ad70a434e3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "49bcbdcd-4d9d-4b1c-a20c-5b3804f29cb1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
