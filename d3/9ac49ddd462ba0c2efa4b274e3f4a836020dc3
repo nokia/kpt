@@ -1,0 +1,19 @@
+e2e/testdata/fn-render/basicpipeline-semver/.expected/diff.patch
+  s_9c164ff796cd7d::t_c0c2cae7ba5c95 2,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "d39ac49ddd462ba0c2efa4b274e3f4a836020dc3",
+  "prompts": {},
+  "sessions": {
+    "s_9c164ff796cd7d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "240c48a5-7f72-477c-9867-7cf6f3a49477",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
