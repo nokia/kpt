@@ -1,0 +1,73 @@
+e2e/testdata/fn-render/basicpipeline-semver/.expected/diff.patch
+  s_9c164ff796cd7d::t_c0c2cae7ba5c95 2,37
+internal/gitutil/gitutil_test.go
+  s_8b68ad70a434e3::t_49832a4ff36be2 393-396,398-399,408,440-450,452-455,458-597,599-668
+  s_8b68ad70a434e3::t_46842c088a1684 397
+  s_8b68ad70a434e3::t_0b403b1e2c8d7b 437-439
+  s_8b68ad70a434e3::t_f25f0cf55ecc62 451
+  s_8b68ad70a434e3::t_1c36e15887f360 456-457
+internal/gitutil/gitutil.go
+  s_35a6f22502cdd8::t_418929215d3946 201,203
+  s_35a6f22502cdd8::t_49d3ca8ce6f9cc 303
+  s_35a6f22502cdd8::t_4dc47f71198121 197
+  s_35a6f22502cdd8::t_7f1eac8055e923 64-66
+  s_35a6f22502cdd8::t_6f9ab0dad9da8f 178-179
+  s_35a6f22502cdd8::t_4b5175d96a39aa 192-195
+  s_35a6f22502cdd8::t_f855dfbf503120 391
+  s_35a6f22502cdd8::t_1c4d49f83ee69d 187-189
+  s_35a6f22502cdd8::t_ec632b6fa2126e 206-209
+  s_35a6f22502cdd8::t_651249cb1734ce 211,529
+  s_35a6f22502cdd8::t_5ac7c1842bd288 415
+  s_35a6f22502cdd8::t_dd4072f7312ab7 61-63
+  s_35a6f22502cdd8::t_a82dd9d42b6077 67,190,196,204,210,218,224,234,262,266,269-270,280-283,285-291,293-299,325,386,392,436,455,467,486,488,512
+  s_35a6f22502cdd8::t_0c0367b2e6b650 68-70
+  s_35a6f22502cdd8::t_5f756eacc9e9ea 177
+  s_35a6f22502cdd8::t_7a96faaaf91766 58-60
+  s_35a6f22502cdd8::t_89fd3d1f82b6bd 191
+  s_35a6f22502cdd8::t_6eeeb431e4b707 199-200
+  s_35a6f22502cdd8::t_1d268545d8061a 215-217
+  s_35a6f22502cdd8::t_0a484422d453cb 219-223
+  s_35a6f22502cdd8::t_4662d93c5ae0c2 225-227,231-233
+  s_35a6f22502cdd8::t_8eb0a4514c151b 235-236
+  s_35a6f22502cdd8::t_6c9c77784629b9 322-324
+  s_35a6f22502cdd8::t_7ee377a77a0d73 326-328
+  s_35a6f22502cdd8::t_fc62f9a1ae45d4 385
+  s_35a6f22502cdd8::t_96baf2513f89d4 393-395
+  s_35a6f22502cdd8::t_a87bc78f071268 435
+  s_35a6f22502cdd8::t_207d0025e24da2 437-439
+  s_35a6f22502cdd8::t_fe61981152a972 487
+  s_35a6f22502cdd8::t_54c06ea1ab159d 489-491
+  s_35a6f22502cdd8::t_05a32dcd837df5 528
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.5",
+  "base_commit_sha": "d40cf6577553571e153688383cf5a83a7062a7eb",
+  "prompts": {},
+  "sessions": {
+    "s_35a6f22502cdd8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "989da4e7-3b5d-4ed1-af86-95f6b7794613",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    },
+    "s_8b68ad70a434e3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "49bcbdcd-4d9d-4b1c-a20c-5b3804f29cb1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    },
+    "s_9c164ff796cd7d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "240c48a5-7f72-477c-9867-7cf6f3a49477",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "tar <gabor.tar.ext@nokia.com>"
+    }
+  }
+}
