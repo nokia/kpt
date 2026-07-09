@@ -247,7 +247,8 @@ func (fr *FunctionRunner) Filter(input []*yaml.RNode) (output []*yaml.RNode, err
 		printOpt := printer.NewOpt()
 		pr.OptPrintf(printOpt, "[FAIL] %q in %v\n", fr.name, time.Since(t0).Truncate(time.Millisecond*100))
 		printFnResult(fr.ctx, fr.fnResult, printOpt)
-		if fnErr, ok := goerrors.AsType[*ExecError](err); ok {
+		var fnErr *ExecError
+		if goerrors.As(err, &fnErr) {
 			printFnExecErr(fr.ctx, fnErr)
 			return nil, errors.ErrAlreadyHandled
 		}
@@ -302,7 +303,8 @@ func (fr *FunctionRunner) do(input []*yaml.RNode) (output []*yaml.RNode, err err
 		// a default is important.
 		fnResult.ExitCode = 1
 		fr.fnResults.ExitCode = 1
-		if execErr, ok := goerrors.AsType[*ExecError](err); ok {
+		var execErr *ExecError
+		if goerrors.As(err, &execErr) {
 			fnResult.ExitCode = execErr.ExitCode
 			fnResult.Stderr = execErr.Stderr
 		}

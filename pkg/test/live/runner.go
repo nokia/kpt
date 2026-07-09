@@ -90,7 +90,8 @@ func (r *Runner) RunApply(t *testing.T) (string, string, error) {
 
 func (r *Runner) VerifyExitCode(t *testing.T, err error) {
 	exitCode := 0
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
 		exitCode = exitErr.ExitCode()
 	}
 	if want, got := r.Config.ExitCode, exitCode; want != got {
