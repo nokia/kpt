@@ -48,19 +48,17 @@ There are a number of key principles to be borne in mind, with regard to configu
 
 The kpt toolchain includes the following components:
 
-- [**kpt CLI**]({{% relref "/reference/cli" %}}): The kpt CLI supports package and function
-  operations, as well as deployment, either through direct apply or through GitOps. By
-  keeping an inventory of deployed resources, kpt enables resource pruning, aggregated
-  status and observability, and an improved preview experience.
+- [**kpt CLI**]({{% relref "/reference/cli" %}}): The kpt CLI supports package and function operations, as well as
+  deployment, either through direct apply or through GitOps. By keeping an inventory of deployed resources, kpt enables
+  resource pruning, aggregated status and observability, and an improved preview experience.
 
-- [**Function SDK**](https://github.com/kptdev/krm-functions-sdk): Any general-purpose or
-  domain-specific language can be used to create functions to transform and/or validate the YAML
-  KRM input/output format. However, we provide software development kits (SDKs) to simplify the
-  function authoring process, in [Go]({{% relref "/book/05-developing-functions#developing-in-go" %}}). 
+- [**Function SDK**](https://github.com/kptdev/krm-functions-sdk): Any general-purpose or domain-specific language can
+  be used to create functions to transform and/or validate the YAML KRM input/output format. However, we provide SDKs to
+  simplify the function authoring process, in [Go]({{% relref "/book/05-developing-functions#developing-in-Go" %}}). 
 
-- [**Function catalog**](https://catalog.kpt.dev): This is a catalog of off-the-shelf, tested functions.
-  kpt makes configurations easy to create and transform, via reusable functions. Because the functions
-  are expected to be used for in-place transformation, they need to be idempotent.
+- [**Function catalog**](https://catalog.kpt.dev): This is a catalog of off-the-shelf, tested functions. kpt makes
+  configurations easy to create and transform, via reusable functions. Because the functions are expected to be used for
+  in-place transformation, they need to be idempotent.
 
 ## Packages
 
@@ -167,10 +165,14 @@ kpt pkg get https://github.com/kubernetes/examples/tree/master/_archived/spark
 ```
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 Details of how to work with packages are set out in [Chapter 3](../03-packages).
 =======
 We will go into details of how to work with packages in [Chapter 3]({{% relref "/book/03-packages" %}}).
 >>>>>>> main
+=======
+Details of how to work with packages are set out in [Chapter 3]({{% relref "/book/03-packages" %}}).
+>>>>>>> bba110b3d (Proofreading up to kptfile annotations.)
 
 ### Local Configuration
 
@@ -242,7 +244,11 @@ Let us suppose that you have rendered the package, and would like to deploy it t
 - **Apply**: Use the `kpt live apply` command.
 - **Observe**: Use the `kpt live status` command.
 
+<<<<<<< HEAD
 First, use the `kpt live apply --dry-run` command to validate the resources in your package and verify that the expected resources will be applied and pruned. If the preview looks good, then apply the package, using the `kpt live apply` command. Afterwards, you may observe the status of the package on the cluster.
+=======
+First, use the kpt `live apply --dry-run` command to validate the resources in your package and verify that the expected resources will be applied and pruned. If the preview looks good, then apply the package, using the `kpt live apply` command. Afterwards, you may observe the status of the package on the cluster.
+>>>>>>> bba110b3d (Proofreading up to kptfile annotations.)
 
 Typically, it is best to store the package in Git:
 
@@ -254,7 +260,11 @@ The publishing flow is orthogonal to the deployment flow. This allows you to act
 
 ## Functions
 
+<<<<<<< HEAD
 A Kubernetes Resource Model (KRM) function (formerly called a _kpt function_) is a containerized program that can perform create, read, update, and delete (CRUD) operations on KRM resources stored on the local filesystem. KRM functions are the extensible mechanism to automate the mutation and validation of KRM resources. The following are some example use cases:
+=======
+A Kubernetes Resource Model (KRM) function (formerly called a _kpt_ function_) is a containerized program that can perform create, read, update, and delete (CRUD) operations on KRM resources stored on the local filesystem. kpt functions are the extensible mechanism to automate the mutation and validation of KRM resources. The following are some example use cases:
+>>>>>>> bba110b3d (Proofreading up to kptfile annotations.)
 
 - Enforce all `Namespace` resources to have a `cost-center` label.
 - Add a label to resources based on certain filtering criteria.
