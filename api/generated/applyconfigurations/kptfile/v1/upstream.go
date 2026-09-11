@@ -32,7 +32,8 @@ type UpstreamApplyConfiguration struct {
 	// UpdateStrategy declares how a package will be updated from upstream.
 	UpdateStrategy *kptfilev1.UpdateStrategyType `json:"updateStrategy,omitempty"`
 	// PreserveExplicitNull, when true, keeps a field explicitly nulled in the
-	// local package during resource-merge instead of deleting it.
+	// local package during resource-merge instead of deleting it. Only applies
+	// to the resource-merge update strategy.
 	PreserveExplicitNull *bool `json:"preserveExplicitNull,omitempty"`
 }
 
