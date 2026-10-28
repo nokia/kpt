@@ -16,14 +16,14 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 )
 
 func main() {
-	var kubeconfig *string
+	var kubeconfig string
 
 	cmd := &cobra.Command{
 		Use:          "pod-manager",
@@ -35,12 +35,7 @@ func main() {
 		SilenceErrors: true,
 		// TODO: replace RunE with starting the manager
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if kubeconfig != nil && *kubeconfig != "" {
-				fmt.Println("Using kubeconfig:", *kubeconfig)
-			} else {
-				fmt.Println("Hello World!")
-			}
-			return nil
+			return runPodManager(kubeconfig)
 		},
 	}
 
@@ -49,10 +44,19 @@ func main() {
 	cmd.InitDefaultHelpCmd()
 
 	// TODO: add more flags
-	kubeconfig = cmd.Flags().String("kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	cmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 
 	err := cmd.Execute()
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func runPodManager(kubeconfig string) error {
+	if kubeconfig != "" {
+		klog.Infof("Using kubeconfig: %s", kubeconfig)
+	} else {
+		klog.Info("Hello World!")
+	}
+	return nil
 }
