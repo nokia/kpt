@@ -49,6 +49,10 @@ test:
 vet:
 	go vet ./...
 
+.PHONY: generate
+generate:
+	GOBIN=$(GOBIN) YEAR_GEN=$(YEAR_GEN) go generate ./...
+
 .PHONY: build
 build:
 	go build ${LDFLAGS} -o $(GOBIN)/pod-manager -v .

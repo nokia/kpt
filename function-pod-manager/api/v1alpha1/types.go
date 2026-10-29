@@ -15,6 +15,8 @@
 // Package v1alpha1 contains API schema definitions for the function pod manager.
 //
 // +kubebuilder:object:generate=true
+// +kubebuilder:ac:generate=true
+// +kubebuilder:ac:output:package=../../generated/applyconfigurations
 // +groupName=config.porch.kpt.dev
 package v1alpha1
 
@@ -29,6 +31,7 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=functionpodrequests,singular=functionpodrequest,scope=Namespaced
 // +kubebuilder:validation:XValidation:rule="self.spec == oldSelf.spec",message="spec is immutable"
+// +kubebuilder:ac:generate=true
 type FunctionPodRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

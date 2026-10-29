@@ -13,7 +13,10 @@
 # limitations under the License.
 
 # fix/fmt/vet/lint/test/tidy/function-pod-manager are generated in make/checks.mk.
-.PHONY: function-pod-manager/build
+.PHONY: function-pod-manager/build function-pod-manager/generate
 
 function-pod-manager/build:
 	$(MAKE) -C function-pod-manager build
+
+function-pod-manager/generate:
+	$(MAKE) -C function-pod-manager generate
