@@ -16,5 +16,6 @@
 package apis
 
 //go:generate go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 object:headerFile="../hack/boilerplate.go.txt",year=$YEAR_GEN applyconfiguration:headerFile="../hack/boilerplate.go.txt" paths=./...
+//go:generate go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 crd:crdVersions=v1,headerFile="../hack/boilerplate.yaml.txt",year=$YEAR_GEN output:crd:artifacts:config=./generated/crds paths=./function-pod-manager/...
 // Drop generated helpers that pull in k8s.io/apimachinery; typed ACs are enough.
 //go:generate rm -rf generated/applyconfigurations/utils.go generated/applyconfigurations/internal

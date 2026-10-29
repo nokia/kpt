@@ -1,0 +1,114 @@
+# Copyright 2026 The kpt Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+  name: functionpodrequests.config.porch.kpt.dev
+spec:
+  group: config.porch.kpt.dev
+  names:
+    kind: FunctionPodRequest
+    listKind: FunctionPodRequestList
+    plural: functionpodrequests
+    singular: functionpodrequest
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          FunctionPodRequest is a client-owned request to evaluate a KRM function.
+          Spec is immutable after create. Status is a subresource.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: FunctionPodRequestSpec is the client-owned, immutable desired
+              evaluation.
+            properties:
+              deadline:
+                description: Deadline is the absolute RFC3339 time after which the
+                  request must not stay Created or Claimed.
+                format: date-time
+                type: string
+              image:
+                description: Image is the KRM function image to evaluate.
+                minLength: 1
+                type: string
+              versionConstraint:
+                description: VersionConstraint is the semver constraint from the Kptfile
+                  pipeline step, carried verbatim.
+                type: string
+            required:
+            - image
+            type: object
+          status:
+            description: FunctionPodRequestStatus is written through the status subresource.
+            properties:
+              evaluatorPodIP:
+                description: EvaluatorPodIP is the IP of the Function Evaluator Pod
+                  that claimed this request.
+                type: string
+              evaluatorPodName:
+                description: EvaluatorPodName is the name of the Function Evaluator
+                  Pod that claimed this request.
+                type: string
+              evaluatorPort:
+                description: EvaluatorPort is the FunctionEvaluator gRPC port of the
+                  claiming pod.
+                format: int32
+                type: integer
+              message:
+                description: Message is infrastructure failure text for PodManagementError
+                  and EvaluationError.
+                type: string
+              phase:
+                description: Phase is Created, Claimed, PodManagementError, or EvaluationError.
+                enum:
+                - Created
+                - Claimed
+                - PodManagementError
+                - EvaluationError
+                type: string
+              resolvedVersion:
+                description: ResolvedVersion is the concrete version the claiming
+                  Function Evaluator Pod runs.
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: spec is immutable
+          rule: self.spec == oldSelf.spec
+    served: true
+    storage: true
+    subresources:
+      status: {}
