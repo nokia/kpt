@@ -19,11 +19,12 @@ include ./make/info.mk
 include ./make/testing.mk
 include ./make/api.mk
 include ./make/cli.mk
+include ./make/function-pod-manager.mk
 include ./make/checks.mk
 
 all: fix vet fmt lint test build tidy
 
-build: cli/build
+build: cli/build function-pod-manager/build
 
 update-deps-to-head:
 	go get sigs.k8s.io/cli-utils@master
@@ -135,7 +136,7 @@ vulncheck: build
 .PHONY: work
 go.work go.work.sum work:
 	@if [ ! -f go.work ]; then \
-	   go work init . api cli mdtogo; \
+	   go work init . api cli mdtogo function-pod-manager; \
 	fi
 
 .PHONY: clean-work
