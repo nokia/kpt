@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package v1alpha1 contains API schema definitions for the function pod manager.
-//
-// +kubebuilder:object:generate=true
-// +kubebuilder:ac:generate=true
-// +kubebuilder:ac:output:package=../../generated/applyconfigurations
-// +groupName=config.porch.kpt.dev
 package v1alpha1
 
 import (

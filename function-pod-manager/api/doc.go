@@ -15,8 +15,4 @@
 // Package apis contains the function pod manager API type definitions.
 package apis
 
-//go:generate go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 object:headerFile="../../hack/boilerplate.go.txt",year=$YEAR_GEN applyconfiguration:headerFile="../../hack/boilerplate.go.txt" paths=./...
-//go:generate go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 crd:crdVersions=v1,headerFile="../../hack/boilerplate.yaml.txt",year=$YEAR_GEN output:crd:artifacts:config=../generated/crds paths=./...
-// utils.go is only the untyped ForKind helper. FunctionPodRequest apply
-// configurations import generated/applyconfigurations/internal, so that package stays.
-//go:generate rm -f ../generated/applyconfigurations/utils.go
+//go:generate go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.21.0 object:headerFile="../../hack/boilerplate.go.txt",year=$YEAR_GEN applyconfiguration:headerFile="../../hack/boilerplate.go.txt" crd:crdVersions=v1,headerFile="../../hack/boilerplate.yaml.txt",year=$YEAR_GEN output:crd:artifacts:config=generated/crds paths=./...

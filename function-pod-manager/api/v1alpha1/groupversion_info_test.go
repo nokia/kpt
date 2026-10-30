@@ -28,7 +28,7 @@ func TestAllKindsRegistersFunctionPodRequest(t *testing.T) {
 	// given
 	scheme := runtime.NewScheme()
 	wantGVK := schema.GroupVersionKind{
-		Group:   "config.porch.kpt.dev",
+		Group:   "kpt.dev",
 		Version: "v1alpha1",
 		Kind:    "FunctionPodRequest",
 	}
@@ -40,7 +40,7 @@ func TestAllKindsRegistersFunctionPodRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []TypeInfo{TypeFunctionPodRequest}, AllKinds)
 	require.Equal(t, wantGVK, TypeFunctionPodRequest.GVK())
-	require.Equal(t, "config.porch.kpt.dev/v1alpha1", TypeFunctionPodRequest.APIVersion())
+	require.Equal(t, "kpt.dev/v1alpha1", TypeFunctionPodRequest.APIVersion())
 	require.True(t, scheme.Recognizes(wantGVK))
 	require.True(t, scheme.Recognizes(wantGVK.GroupVersion().WithKind("FunctionPodRequestList")))
 }

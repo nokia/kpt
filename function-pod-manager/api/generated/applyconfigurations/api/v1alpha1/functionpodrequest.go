@@ -17,8 +17,8 @@
 package v1alpha1
 
 import (
+	internal "github.com/kptdev/kpt/function-pod-manager/api/generated/applyconfigurations/internal"
 	apiv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
-	internal "github.com/kptdev/kpt/function-pod-manager/generated/applyconfigurations/internal"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
@@ -44,7 +44,7 @@ func FunctionPodRequest(name, namespace string) *FunctionPodRequestApplyConfigur
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("FunctionPodRequest")
-	b.WithAPIVersion("config.porch.kpt.dev/v1alpha1")
+	b.WithAPIVersion("kpt.dev/v1alpha1")
 	return b
 }
 
@@ -65,7 +65,7 @@ func ExtractFunctionPodRequestFrom(functionPodRequest *apiv1alpha1.FunctionPodRe
 	b.WithNamespace(functionPodRequest.Namespace)
 
 	b.WithKind("FunctionPodRequest")
-	b.WithAPIVersion("config.porch.kpt.dev/v1alpha1")
+	b.WithAPIVersion("kpt.dev/v1alpha1")
 	return b, nil
 }
 

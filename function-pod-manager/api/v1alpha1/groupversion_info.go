@@ -22,7 +22,10 @@ import (
 
 var (
 	// GroupVersion is the group version used to register these objects.
-	GroupVersion = schema.GroupVersion{Group: "config.porch.kpt.dev", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: "kpt.dev", Version: "v1alpha1"}
+
+	// SchemeGroupVersion is an alias for controller-gen applyconfiguration helpers.
+	SchemeGroupVersion = GroupVersion
 
 	TypeFunctionPodRequest = TypeInfo{
 		Kind:     "FunctionPodRequest",

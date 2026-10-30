@@ -17,9 +17,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.21.0
-  name: functionpodrequests.config.porch.kpt.dev
+  name: functionpodrequests.kpt.dev
 spec:
-  group: config.porch.kpt.dev
+  group: kpt.dev
   names:
     kind: FunctionPodRequest
     listKind: FunctionPodRequestList
