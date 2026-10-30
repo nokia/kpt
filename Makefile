@@ -53,7 +53,7 @@ install-mdtogo:
 schema:
 	SWAGGER_VERSION=$(SWAGGER_VERSION) GOBIN=$(GOBIN) scripts/generate-schema.sh
 
-generate: install-mdtogo api/generate
+generate: install-mdtogo api/generate function-pod-manager/generate
 	rm -rf internal/docs/generated
 	mkdir internal/docs/generated
 	$(MAKE) cli/generate
