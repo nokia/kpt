@@ -15,28 +15,39 @@
 package main
 
 import (
-	"bytes"
 	"testing"
+	"time"
 
+	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/internal/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/klog/v2"
 )
 
-func Test(t *testing.T) {
-	const kubeconfig = "my-kubeconfig.config"
-	origState := klog.CaptureState()
-	t.Cleanup(func() {
-		klog.Flush()
-		origState.Restore()
-	})
+func TestFlagDefaults(t *testing.T) {
+	opts := server.DefaultOptions()
+	cmd := newCommand(&opts)
 
-	buffer := &bytes.Buffer{}
-	klog.LogToStderr(false)
-	klog.SetOutput(buffer)
+	assert.Equal(t, fnpod.DefaultNamespace, opts.RequestNamespace)
+	assert.Equal(t, fnpod.DefaultNamespace, opts.PodNamespace)
+	assert.Equal(t, 10*time.Minute, opts.RequestRetention)
+	assert.Equal(t, 5*time.Second, opts.ScaleUpDebounce)
+	assert.Equal(t, time.Minute, opts.ScanInterval)
+	assert.Equal(t, 30*time.Minute, opts.PodTTL)
+	assert.Equal(t, 2, opts.MaxWaitlistLength)
+	assert.Equal(t, 1, opts.MaxParallelPods)
+	assert.Equal(t, 60*time.Second, opts.PodReadyTimeout)
+	assert.True(t, opts.Warmup)
+	assert.True(t, opts.LeaderElection)
+	assert.Equal(t, fnpod.DefaultImagePrefix, opts.DefaultImagePrefix)
 
-	err := runPodManager(kubeconfig)
-
-	require.NoError(t, err)
-	assert.Contains(t, buffer.String(), kubeconfig)
+	flags := cmd.Flags()
+	require.NotNil(t, flags.Lookup("fn-request-namespace"))
+	require.NotNil(t, flags.Lookup("request-retention"))
+	require.NotNil(t, flags.Lookup("leader-elect"))
+	require.NotNil(t, flags.Lookup("pod-ttl"))
+	require.NotNil(t, flags.Lookup("warm-up-pod-cache"))
+	assert.Nil(t, flags.Lookup("max-function-retries"))
+	assert.Nil(t, flags.Lookup("function-retry-interval"))
+	assert.Equal(t, "true", flags.Lookup("leader-elect").DefValue)
 }

@@ -17,8 +17,8 @@
 package v1alpha1
 
 import (
+	functionpodrequestv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	internal "github.com/kptdev/kpt/function-pod-manager/api/generated/applyconfigurations/internal"
-	apiv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
@@ -55,9 +55,9 @@ func FunctionPodRequest(name, namespace string) *FunctionPodRequestApplyConfigur
 // ExtractFunctionPodRequestFrom provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractFunctionPodRequestFrom(functionPodRequest *apiv1alpha1.FunctionPodRequest, fieldManager string, subresource string) (*FunctionPodRequestApplyConfiguration, error) {
+func ExtractFunctionPodRequestFrom(functionPodRequest *functionpodrequestv1alpha1.FunctionPodRequest, fieldManager string, subresource string) (*FunctionPodRequestApplyConfiguration, error) {
 	b := &FunctionPodRequestApplyConfiguration{}
-	err := managedfields.ExtractInto(functionPodRequest, internal.Parser().Type("com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequest"), fieldManager, b, subresource)
+	err := managedfields.ExtractInto(functionPodRequest, internal.Parser().Type("com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequest"), fieldManager, b, subresource)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +79,13 @@ func ExtractFunctionPodRequestFrom(functionPodRequest *apiv1alpha1.FunctionPodRe
 // ExtractFunctionPodRequest provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractFunctionPodRequest(functionPodRequest *apiv1alpha1.FunctionPodRequest, fieldManager string) (*FunctionPodRequestApplyConfiguration, error) {
+func ExtractFunctionPodRequest(functionPodRequest *functionpodrequestv1alpha1.FunctionPodRequest, fieldManager string) (*FunctionPodRequestApplyConfiguration, error) {
 	return ExtractFunctionPodRequestFrom(functionPodRequest, fieldManager, "")
 }
 
 // ExtractFunctionPodRequestStatus extracts the applied configuration owned by fieldManager from
 // functionPodRequest for the status subresource.
-func ExtractFunctionPodRequestStatus(functionPodRequest *apiv1alpha1.FunctionPodRequest, fieldManager string) (*FunctionPodRequestApplyConfiguration, error) {
+func ExtractFunctionPodRequestStatus(functionPodRequest *functionpodrequestv1alpha1.FunctionPodRequest, fieldManager string) (*FunctionPodRequestApplyConfiguration, error) {
 	return ExtractFunctionPodRequestFrom(functionPodRequest, fieldManager, "status")
 }
 
