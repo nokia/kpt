@@ -37,7 +37,7 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
-- name: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequest
+- name: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequest
   map:
     fields:
     - name: apiVersion
@@ -51,13 +51,13 @@ var schemaYAML = typed.YAMLObject(`types:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
     - name: spec
       type:
-        namedType: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestSpec
+        namedType: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestSpec
     - name: status
       type:
-        namedType: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestStatus
-- name: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestPhase
+        namedType: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestStatus
+- name: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestPhase
   scalar: string
-- name: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestSpec
+- name: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestSpec
   map:
     fields:
     - name: deadline
@@ -69,7 +69,7 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: versionConstraint
       type:
         scalar: string
-- name: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestStatus
+- name: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestStatus
   map:
     fields:
     - name: evaluatorPodIP
@@ -86,7 +86,7 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
     - name: phase
       type:
-        namedType: com.github.kptdev.kpt.function-pod-manager.api.v1alpha1.FunctionPodRequestPhase
+        namedType: com.github.kptdev.kpt.function-pod-manager.api.functionpodrequest.v1alpha1.FunctionPodRequestPhase
     - name: resolvedVersion
       type:
         scalar: string

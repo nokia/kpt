@@ -17,7 +17,7 @@
 package v1alpha1
 
 import (
-	apiv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
+	functionpodrequestv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 )
 
 // FunctionPodRequestStatusApplyConfiguration represents a declarative configuration of the FunctionPodRequestStatus type for use
@@ -26,7 +26,7 @@ import (
 // FunctionPodRequestStatus is written through the status subresource.
 type FunctionPodRequestStatusApplyConfiguration struct {
 	// Phase is Created, Claimed, PodManagementError, or EvaluationError.
-	Phase *apiv1alpha1.FunctionPodRequestPhase `json:"phase,omitempty"`
+	Phase *functionpodrequestv1alpha1.FunctionPodRequestPhase `json:"phase,omitempty"`
 	// EvaluatorPodName is the name of the Function Evaluator Pod that claimed this request.
 	EvaluatorPodName *string `json:"evaluatorPodName,omitempty"`
 	// EvaluatorPodIP is the IP of the Function Evaluator Pod that claimed this request.
@@ -48,7 +48,7 @@ func FunctionPodRequestStatus() *FunctionPodRequestStatusApplyConfiguration {
 // WithPhase sets the Phase field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Phase field is set to the value of the last call.
-func (b *FunctionPodRequestStatusApplyConfiguration) WithPhase(value apiv1alpha1.FunctionPodRequestPhase) *FunctionPodRequestStatusApplyConfiguration {
+func (b *FunctionPodRequestStatusApplyConfiguration) WithPhase(value functionpodrequestv1alpha1.FunctionPodRequestPhase) *FunctionPodRequestStatusApplyConfiguration {
 	b.Phase = &value
 	return b
 }

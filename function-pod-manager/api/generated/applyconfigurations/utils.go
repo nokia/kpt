@@ -17,9 +17,9 @@
 package applyconfigurations
 
 import (
-	apiv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/generated/applyconfigurations/api/v1alpha1"
+	v1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
+	functionpodrequestv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/generated/applyconfigurations/functionpodrequest/v1alpha1"
 	internal "github.com/kptdev/kpt/function-pod-manager/api/generated/applyconfigurations/internal"
-	v1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
@@ -31,11 +31,11 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=kpt.dev, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithKind("FunctionPodRequest"):
-		return &apiv1alpha1.FunctionPodRequestApplyConfiguration{}
+		return &functionpodrequestv1alpha1.FunctionPodRequestApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FunctionPodRequestSpec"):
-		return &apiv1alpha1.FunctionPodRequestSpecApplyConfiguration{}
+		return &functionpodrequestv1alpha1.FunctionPodRequestSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FunctionPodRequestStatus"):
-		return &apiv1alpha1.FunctionPodRequestStatusApplyConfiguration{}
+		return &functionpodrequestv1alpha1.FunctionPodRequestStatusApplyConfiguration{}
 
 	}
 	return nil
