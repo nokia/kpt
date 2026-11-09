@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"

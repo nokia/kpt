@@ -23,9 +23,9 @@ import (
 
 	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
-	"github.com/kptdev/kpt/function-pod-manager/internal/controller"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
-	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner"
+	"github.com/kptdev/kpt/function-pod-manager/controller"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/provisioner"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

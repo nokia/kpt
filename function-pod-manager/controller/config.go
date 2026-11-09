@@ -15,7 +15,7 @@
 package controller
 
 import (
-	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 )
 

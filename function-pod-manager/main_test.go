@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/kptdev/kpt/api/runneroptions"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
-	"github.com/kptdev/kpt/function-pod-manager/internal/server"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

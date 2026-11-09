@@ -18,7 +18,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/kptdev/kpt/function-pod-manager/internal/server"
+	"github.com/kptdev/kpt/function-pod-manager/server"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"

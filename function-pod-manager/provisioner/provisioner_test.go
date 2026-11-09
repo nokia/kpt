@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/kptdev/kpt/api/runneroptions"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

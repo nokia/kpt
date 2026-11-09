@@ -23,9 +23,9 @@ import (
 
 	"github.com/kptdev/kpt/api/utils/image"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
-	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner"
-	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/provisioner"
+	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"

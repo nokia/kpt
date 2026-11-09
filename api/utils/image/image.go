@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"k8s.io/klog/v2"
 )
 
 func MatchesAnyConstraint(version string, constraints []string) bool {
@@ -66,7 +65,7 @@ func FindBestSemverMatch(constraint string, cachedTags []string) (string, error)
 	for _, tag := range cachedTags {
 		v, err := semver.NewVersion(tag)
 		if err != nil {
-			klog.V(2).Infof("Failed to parse version %q: %v", tag, err)
+			// Failed to parse version
 			continue
 		}
 
@@ -84,7 +83,7 @@ func FindBestSemverMatch(constraint string, cachedTags []string) (string, error)
 	})
 
 	selected := matches[len(matches)-1]
-	klog.V(3).Infof("Selected tag %q", selected.key)
+	// selected tag
 
 	return selected.key, nil
 }

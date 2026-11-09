@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
