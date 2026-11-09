@@ -15,8 +15,8 @@
 package controller
 
 import (
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 )
 
 func limitsFor(configs []functionconfig.FunctionConfig, repository, version, prefix string, defaults Limits) Limits {
@@ -44,8 +44,7 @@ func executorFor(configs []functionconfig.FunctionConfig, repository, version, p
 		if exec == nil {
 			continue
 		}
-		repo, err := repositoryOf(configs[i].Spec.Image, prefix)
-		if err != nil || repo != repository {
+		if repositoryOf(configs[i].Spec.Image, prefix) != repository {
 			continue
 		}
 		if util.TagsMatch(version, exec.Tags) {

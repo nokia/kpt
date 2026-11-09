@@ -21,11 +21,12 @@ import (
 	"os"
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/controller"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -38,29 +39,50 @@ import (
 
 // Options is the pod manager process configuration.
 type Options struct {
-	Kubeconfig                 string
-	RequestNamespace           string
-	PodNamespace               string
-	RequestRetention           time.Duration
-	ScaleUpDebounce            time.Duration
-	ScanInterval               time.Duration
-	PodTTL                     time.Duration
-	Warmup                     bool
+	Kubeconfig string
+	// RequestNamespace is the namespace that holds FunctionPodRequest objects.
+	RequestNamespace string
+	// PodNamespace is the namespace for evaluator pods, Services, templates, and FunctionConfig.
+	PodNamespace string
+
+	// RequestRetention is how long a PodManagementError or EvaluationError request is kept.
+	RequestRetention time.Duration
+	// ScaleUpDebounce is how long a request must stay Created before a new evaluator pod is started.
+	ScaleUpDebounce time.Duration
+
+	// ScanInterval is how often the garbage collector reaps idle pods and expired requests.
+	ScanInterval time.Duration
+	// ReapParallelism is how many requests one scan reaps at once. Zero uses 8.
+	ReapParallelism int
+	// PodTTL is how long an idle evaluator pod is kept.
+	PodTTL time.Duration
+	// Warmup starts a pod for each concrete FunctionConfig tag when the manager starts.
+	Warmup bool
+	// MaxWaitlistLength is how many Created requests one pod may cover before another pod of that function is started.
+	MaxWaitlistLength int
+	// MaxParallelPods is the most evaluator pods one function may run.
+	MaxParallelPods int
+	// PodReadyTimeout is how long a new pod may stay unready before the request fails.
+	PodReadyTimeout time.Duration
+
+	// DefaultImagePrefix is prepended to a function name that is not a full image reference.
+	DefaultImagePrefix string
+	// WrapperServerImage is the image that provides the wrapper-server binary copied into the evaluator pod.
+	WrapperServerImage         string
 	EnablePrivateRegistries    bool
 	RegistryAuthSecretPath     string
 	RegistryAuthSecretName     string
 	EnablePrivateRegistriesTLS bool
 	TLSSecretPath              string
-	MaxWaitlistLength          int
-	MaxParallelPods            int
-	PodReadyTimeout            time.Duration
-	DefaultImagePrefix         string
-	WrapperServerImage         string
-	LeaderElection             bool
-	HealthProbeBindAddress     string
-	LeaseDuration              time.Duration
-	RenewDeadline              time.Duration
-	RetryPeriod                time.Duration
+
+	LeaderElection         bool
+	HealthProbeBindAddress string
+	// LeaseDuration is how long non-leaders wait before taking leadership. Zero uses the controller-runtime default.
+	LeaseDuration time.Duration
+	// RenewDeadline is how long the leader retries refreshing leadership. Zero uses the controller-runtime default.
+	RenewDeadline time.Duration
+	// RetryPeriod is how long leader election waits between retries. Zero uses the controller-runtime default.
+	RetryPeriod time.Duration
 }
 
 // DefaultOptions returns the porch pod-lifecycle defaults plus the pod manager flags.
@@ -71,6 +93,7 @@ func DefaultOptions() Options {
 		RequestRetention:       10 * time.Minute,
 		ScaleUpDebounce:        5 * time.Second,
 		ScanInterval:           time.Minute,
+		ReapParallelism:        controller.DefaultReapParallelism,
 		PodTTL:                 30 * time.Minute,
 		Warmup:                 true,
 		RegistryAuthSecretPath: "/var/tmp/config-secret/.dockerconfigjson",
@@ -79,7 +102,7 @@ func DefaultOptions() Options {
 		MaxWaitlistLength:      2,
 		MaxParallelPods:        1,
 		PodReadyTimeout:        60 * time.Second,
-		DefaultImagePrefix:     fnpod.DefaultImagePrefix,
+		DefaultImagePrefix:     runneroptions.GHCRImagePrefix,
 		WrapperServerImage:     os.Getenv(fnpod.WrapperServerImageEnv),
 		LeaderElection:         true,
 		HealthProbeBindAddress: ":8081",
@@ -122,6 +145,7 @@ func Start(ctx context.Context, opts Options) error {
 		FunctionPodRequestReconciler: requests,
 		ScanInterval:                 opts.ScanInterval,
 		WarmupOnStart:                opts.Warmup,
+		ReapParallelism:              opts.ReapParallelism,
 	}
 	if err := mgr.Add(collector); err != nil {
 		return fmt.Errorf("add garbage collector: %w", err)

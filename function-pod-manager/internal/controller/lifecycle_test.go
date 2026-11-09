@@ -19,9 +19,10 @@ import (
 	"testing"
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -76,8 +77,9 @@ func TestUnschedulablePodFailsTheRequest(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, v1alpha1.FunctionPodRequestPhasePodManagementError, currentPhase(t, kube, "unschedulable"))
-	require.NotEmpty(t, events.byReason(fnpod.EventStartFailed))
-	assert.Contains(t, events.byReason(fnpod.EventStartFailed)[0].message, corev1.PodReasonUnschedulable)
+	failed := eventsFor(t, events, fnpod.EventStartFailed)
+	require.NotEmpty(t, failed)
+	assert.Contains(t, failed[0], corev1.PodReasonUnschedulable)
 }
 
 func TestPendingPodPastTheReadyTimeoutFailsTheRequest(t *testing.T) {
@@ -192,13 +194,13 @@ func TestWildcardFunctionConfigSuppliesTheLimits(t *testing.T) {
 	cfg.Spec.PodExecutor.TimeToLive = metav1.Duration{Duration: 15 * time.Minute}
 	defaults := Limits{PreferredQueue: 2, MaxParallel: 1, PodTTL: time.Hour}
 
-	got := limitsFor([]functionconfig.FunctionConfig{*cfg}, testRepo, "v9.9.9", fnpod.DefaultImagePrefix, defaults)
+	got := limitsFor([]functionconfig.FunctionConfig{*cfg}, testKrmFunction, "v9.9.9", runneroptions.GHCRImagePrefix, defaults)
 
 	assert.Equal(t, 4, got.PreferredQueue)
 	assert.Equal(t, 3, got.MaxParallel)
 	assert.Equal(t, 15*time.Minute, got.PodTTL)
 	assert.False(t, containsStar(nil))
-	assert.Nil(t, executorFor([]functionconfig.FunctionConfig{{}}, testRepo, "v1", fnpod.DefaultImagePrefix))
+	assert.Nil(t, executorFor([]functionconfig.FunctionConfig{{}}, testKrmFunction, "v1", runneroptions.GHCRImagePrefix))
 }
 
 func TestGarbageCollectorStartStopsWhenTheContextEnds(t *testing.T) {

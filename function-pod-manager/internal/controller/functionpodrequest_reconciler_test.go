@@ -16,14 +16,15 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"testing"
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -39,8 +40,8 @@ import (
 )
 
 const (
-	testNamespace = "fn-test"
-	testRepo      = "ghcr.io/example/merge-netconf"
+	testNamespace   = "fn-test"
+	testKrmFunction = "ghcr.io/some-krm-function"
 )
 
 func TestSatisfyingPodLeavesRequestCreated(t *testing.T) {
@@ -53,16 +54,14 @@ func TestSatisfyingPodLeavesRequestCreated(t *testing.T) {
 
 	assert.Equal(t, v1alpha1.FunctionPodRequestPhaseCreated, currentPhase(t, kube, "keep"))
 	assert.Len(t, evaluatorPods(t, kube), 1)
-	available := events.byReason(fnpod.EventPodAvailable)
+	available := eventsFor(t, events, fnpod.EventPodAvailable)
 	require.Len(t, available, 1)
-	assert.Equal(t, "FunctionPodRequest", available[0].kind)
-	assert.Equal(t, "keep", available[0].name)
-	assert.Equal(t, "An existing evaluator can serve this request", available[0].message)
+	assert.Contains(t, available[0], "An existing evaluator can serve this request")
 	assert.Equal(t, "true", currentRequest(t, kube, "keep").Annotations[fnpod.AnnotationMatchedPod])
 
 	_, err = reconciler.Reconcile(context.Background(), namespacedRequest("keep"))
 	require.NoError(t, err)
-	assert.Len(t, events.byReason(fnpod.EventPodAvailable), 1)
+	assert.Empty(t, eventsFor(t, events, fnpod.EventPodAvailable))
 }
 
 func TestDifferentConstraintStartsPodAtHighestTag(t *testing.T) {
@@ -76,14 +75,12 @@ func TestDifferentConstraintStartsPodAtHighestTag(t *testing.T) {
 	versions := versions(t, kube)
 	assert.Contains(t, versions, "v1.1.2")
 	assert.Contains(t, versions, "v1.0.7")
-	started := events.byReason(fnpod.EventStarting)
+	started := eventsFor(t, events, fnpod.EventStarting)
 	require.Len(t, started, 2)
-	assert.Equal(t, "Pod", started[0].kind)
-	assert.Equal(t, "FunctionPodRequest", started[1].kind)
-	assert.Equal(t, "next", started[1].name)
-	assert.Contains(t, started[0].message, "merge-netconf:v1.1.2")
-	assert.Contains(t, started[1].message, "merge-netconf:v1.1.2")
-	assert.NotContains(t, started[1].message, "~1.1.0")
+	assert.Contains(t, started[0], "Starting new pod for "+displayName(testKrmFunction, "v1.1.2"))
+	assert.Contains(t, started[1], "Started evaluator pod")
+	assert.Contains(t, started[1], displayName(testKrmFunction, "v1.1.2"))
+	assert.NotContains(t, started[1], "~1.1.0")
 }
 
 func TestQueueStartsAnotherPodAtTheSameVersion(t *testing.T) {
@@ -123,12 +120,11 @@ func TestUnsatisfiableConstraintSetsPodManagementError(t *testing.T) {
 
 	stored := currentRequest(t, kube, "missing")
 	assert.Equal(t, v1alpha1.FunctionPodRequestPhasePodManagementError, stored.Status.Phase)
-	assert.Contains(t, stored.Status.Message, testRepo)
+	assert.Contains(t, stored.Status.Message, testKrmFunction)
 	assert.Contains(t, stored.Status.Message, "~9.0.0")
-	recorded := events.byReason(fnpod.EventUnsatisfiable)
+	recorded := eventsFor(t, events, fnpod.EventUnsatisfiable)
 	require.Len(t, recorded, 1)
-	assert.Equal(t, "FunctionPodRequest", recorded[0].kind)
-	assert.Contains(t, recorded[0].message, "Cannot start pod for merge-netconf: no published tag satisfies ~9.0.0")
+	assert.Contains(t, recorded[0], "Cannot start pod for "+displayName(testKrmFunction, "")+": no published tag satisfies ~9.0.0")
 	assert.Empty(t, evaluatorPods(t, kube))
 }
 
@@ -150,10 +146,9 @@ func TestImagePullFailureSetsPodManagementError(t *testing.T) {
 	stored := currentRequest(t, kube, "pull")
 	assert.Equal(t, v1alpha1.FunctionPodRequestPhasePodManagementError, stored.Status.Phase)
 	assert.Contains(t, stored.Status.Message, "ImagePullBackOff")
-	recorded := events.byReason(fnpod.EventStartFailed)
+	recorded := eventsFor(t, events, fnpod.EventStartFailed)
 	require.NotEmpty(t, recorded)
-	assert.Equal(t, "Pod", recorded[0].kind)
-	assert.Contains(t, recorded[0].message, "ImagePullBackOff")
+	assert.Contains(t, recorded[0], "ImagePullBackOff")
 }
 
 func TestDeadlineMovesCreatedAndClaimedRequests(t *testing.T) {
@@ -222,10 +217,9 @@ func TestIdlePodIsDeletedAndClaimedPodIsKept(t *testing.T) {
 	err := kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "idle-pod"}, &corev1.Pod{})
 	assert.True(t, apierrors.IsNotFound(err))
 	require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "busy-pod"}, &corev1.Pod{}))
-	deleted := events.byReason(fnpod.EventDeletedIdle)
+	deleted := eventsFor(t, events, fnpod.EventDeletedIdle)
 	require.Len(t, deleted, 1)
-	assert.Equal(t, "Pod", deleted[0].kind)
-	assert.Contains(t, deleted[0].message, "merge-netconf:v1.0.7")
+	assert.Contains(t, deleted[0], displayName(testKrmFunction, "v1.0.7"))
 }
 
 func TestWarmupConcreteTagSkipsRange(t *testing.T) {
@@ -243,59 +237,36 @@ func TestWarmupConcreteTagSkipsRange(t *testing.T) {
 	assert.Equal(t, []string{"v1.2.3"}, got)
 }
 
-type recordedEvent struct {
-	kind    string
-	name    string
-	reason  string
-	message string
-}
-
-type eventLog struct {
-	events []recordedEvent
-}
-
-func (e *eventLog) Event(obj runtime.Object, _ string, reason, message string) {
-	e.events = append(e.events, recordedEvent{
-		kind:    kindOf(obj),
-		name:    nameOf(obj),
-		reason:  reason,
-		message: message,
-	})
-}
-
-func (e *eventLog) Eventf(obj runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	e.Event(obj, eventtype, reason, fmt.Sprintf(messageFmt, args...))
-}
-
-func (e *eventLog) AnnotatedEventf(obj runtime.Object, _ map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	e.Eventf(obj, eventtype, reason, messageFmt, args...)
-}
-
-func (e *eventLog) byReason(reason string) []recordedEvent {
-	var out []recordedEvent
-	for _, event := range e.events {
-		if event.reason == reason {
-			out = append(out, event)
+func eventsFor(t *testing.T, recorder *record.FakeRecorder, reason string) []string {
+	t.Helper()
+	var matched []string
+	for {
+		select {
+		case event := <-recorder.Events:
+			if strings.Contains(event, " "+reason+" ") {
+				matched = append(matched, event)
+			}
+		default:
+			return matched
 		}
 	}
-	return out
 }
 
-func newHarness(t *testing.T, objs ...client.Object) (*FunctionPodRequestReconciler, client.Client, *eventLog) {
+func newHarness(t *testing.T, objs ...client.Object) (*FunctionPodRequestReconciler, client.Client, *record.FakeRecorder) {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	require.NoError(t, v1alpha1.AddToScheme(scheme))
 	require.NoError(t, functionconfig.AddToScheme(scheme))
 	kube := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.FunctionPodRequest{}).WithObjects(objs...).Build()
-	events := &eventLog{}
+	events := record.NewFakeRecorder(32)
 	prov := provisioner.New(kube, provisioner.Config{
 		Namespace:          testNamespace,
 		WrapperServerImage: "wrapper:test",
-		DefaultImagePrefix: fnpod.DefaultImagePrefix,
+		DefaultImagePrefix: runneroptions.GHCRImagePrefix,
 		ImageRegistry: &provisioner.FakeImageRegistry{
 			Tags: map[string][]string{
-				testRepo: {"v1.0.7", "v1.1.2", "latest"},
+				testKrmFunction: {"v1.0.7", "v1.1.2", "latest"},
 			},
 			Digest:     "0123456789abcdef",
 			Entrypoint: []string{"/fn"},
@@ -307,7 +278,7 @@ func newHarness(t *testing.T, objs ...client.Object) (*FunctionPodRequestReconci
 		Provisioner:      prov,
 		RequestNamespace: testNamespace,
 		PodNamespace:     testNamespace,
-		ImagePrefix:      fnpod.DefaultImagePrefix,
+		ImagePrefix:      runneroptions.GHCRImagePrefix,
 		Debounce:         5 * time.Second,
 		Retention:        10 * time.Minute,
 		Limits: Limits{
@@ -329,7 +300,7 @@ func newRequest(name, constraint string, phase v1alpha1.FunctionPodRequestPhase)
 			CreationTimestamp: metav1.NewTime(time.Now().Add(-time.Hour)),
 		},
 		Spec: v1alpha1.FunctionPodRequestSpec{
-			Image:             testRepo,
+			Image:             testKrmFunction,
 			VersionConstraint: constraint,
 		},
 		Status: v1alpha1.FunctionPodRequestStatus{Phase: phase},
@@ -345,7 +316,7 @@ func readyPod(name string) *corev1.Pod {
 			CreationTimestamp: metav1.NewTime(time.Now().Add(-time.Hour)),
 			Labels:            map[string]string{fnpod.LabelImage: name + "-id"},
 			Annotations: map[string]string{
-				fnpod.AnnotationFunctionImage:   testRepo,
+				fnpod.AnnotationFunctionImage:   testKrmFunction,
 				fnpod.AnnotationResolvedVersion: "v1.0.7",
 			},
 		},
@@ -361,7 +332,7 @@ func functionConfig(queue, parallel int, tags []string) *functionconfig.Function
 		TypeMeta:   metav1.TypeMeta{APIVersion: functionconfig.GroupVersion.String(), Kind: "FunctionConfig"},
 		ObjectMeta: metav1.ObjectMeta{Name: "merge-netconf", Namespace: testNamespace},
 		Spec: functionconfig.FunctionConfigSpec{
-			Image: testRepo,
+			Image: testKrmFunction,
 			PodExecutor: &functionconfig.PodExecutorConfig{
 				Tags:                    tags,
 				PreferredMaxQueueLength: queue,
@@ -409,24 +380,3 @@ func versions(t *testing.T, kube client.Client) []string {
 	}
 	return out
 }
-
-func kindOf(obj runtime.Object) string {
-	switch obj.(type) {
-	case *corev1.Pod:
-		return "Pod"
-	case *v1alpha1.FunctionPodRequest:
-		return "FunctionPodRequest"
-	default:
-		return ""
-	}
-}
-
-func nameOf(obj runtime.Object) string {
-	if named, ok := obj.(metav1.Object); ok {
-		return named.GetName()
-	}
-	return ""
-}
-
-// Ensure the test recorder satisfies the interface used by the reconciler.
-var _ record.EventRecorder = (*eventLog)(nil)

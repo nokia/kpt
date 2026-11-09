@@ -22,9 +22,11 @@ import (
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/runneroptions"
+	"github.com/kptdev/kpt/api/utils/image"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -121,17 +123,14 @@ func (p *Provisioner) Warmup(ctx context.Context, cfg *functionconfig.FunctionCo
 		klog.V(3).InfoS("skipping warmup for a semver constraint", "image", cfg.Spec.Image, "tag", tag)
 		return nil
 	}
-	repository, err := util.Repository(util.ResolveImage(cfg.Spec.Image, p.cfg.DefaultImagePrefix))
-	if err != nil {
-		return err
-	}
+	repository := image.Parse(image.WithPrefix(cfg.Spec.Image, p.cfg.DefaultImagePrefix)).Repository()
 	for i := range existing {
 		if existing[i].Annotations[fnpod.AnnotationFunctionImage] == repository &&
 			existing[i].Annotations[fnpod.AnnotationResolvedVersion] == tag {
 			return nil
 		}
 	}
-	_, err = p.CreateEvaluator(ctx, repository, tag, cfg.Spec.PodExecutor, len(existing))
+	_, err := p.CreateEvaluator(ctx, repository, tag, cfg.Spec.PodExecutor, len(existing))
 	return err
 }
 
@@ -220,7 +219,7 @@ func (p *Provisioner) baseServiceTemplate(ctx context.Context) (*functionconfig.
 }
 
 func (p *Provisioner) appendImagePullSecret(image string, pod *corev1.PodTemplateSpec) {
-	if !p.cfg.EnablePrivateRegistries || strings.HasPrefix(image, fnpod.DefaultRegistry) {
+	if !p.cfg.EnablePrivateRegistries || strings.HasPrefix(image, runneroptions.GHCRImagePrefix) {
 		return
 	}
 	for _, secret := range pod.Spec.ImagePullSecrets {

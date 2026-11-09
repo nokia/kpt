@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/utils/image"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -52,9 +53,11 @@ type FunctionPodRequestReconciler struct {
 	RequestNamespace string
 	PodNamespace     string
 	ImagePrefix      string
-	Debounce         time.Duration
-	Retention        time.Duration
-	Limits           Limits
+	// Debounce is how long a request must stay Created before a new evaluator pod is started.
+	Debounce time.Duration
+	// Retention is how long a PodManagementError or EvaluationError request is kept before it is deleted.
+	Retention time.Duration
+	Limits    Limits
 }
 
 // SetupWithManager watches requests and the evaluator pods that can claim them.
@@ -70,6 +73,7 @@ func (r *FunctionPodRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if req.Namespace != r.RequestNamespace {
 		return ctrl.Result{}, nil
 	}
+	now := time.Now()
 	request := &v1alpha1.FunctionPodRequest{}
 	if err := r.Get(ctx, req.NamespacedName, request); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -86,7 +90,7 @@ func (r *FunctionPodRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return r.reconcile(ctx, request, requests, pods, configs, time.Now())
+	return r.reconcile(ctx, request, requests, pods, configs, now)
 }
 
 func (r *FunctionPodRequestReconciler) reconcile(
@@ -107,7 +111,15 @@ func (r *FunctionPodRequestReconciler) reconcile(
 	if wait := r.debounceRemaining(request, now); wait > 0 {
 		return ctrl.Result{RequeueAfter: soonestPositive(wait, r.untilDeadline(request, now))}, nil
 	}
-	result := scaleRequest(request, requests, pods, configs, r.ImagePrefix, r.Limits, now)
+	result := scaler{
+		request:  request,
+		requests: requests,
+		pods:     pods,
+		configs:  configs,
+		prefix:   r.ImagePrefix,
+		defaults: r.Limits,
+		now:      now,
+	}.scale()
 	switch result.action {
 	case scalePodFailed:
 		return ctrl.Result{}, r.failPod(ctx, request, result.pod, result.message)
@@ -148,7 +160,7 @@ func (r *FunctionPodRequestReconciler) startPod(
 		r.event(request, corev1.EventTypeWarning, fnpod.EventStartFailed, "Failed to start new pod: "+message)
 		return ctrl.Result{}, r.writeError(ctx, request, v1alpha1.FunctionPodRequestPhasePodManagementError, message)
 	}
-	display := util.DisplayName(result.repository, version)
+	display := displayName(result.repository, version)
 	r.event(pod, corev1.EventTypeNormal, fnpod.EventStarting, "Starting new pod for "+display)
 	r.event(request, corev1.EventTypeNormal, fnpod.EventStarting, "Started evaluator pod "+pod.Name+" for "+display)
 	klog.InfoS("function pod request started evaluator", "request", request.Name, "namespace", request.Namespace, "pod", pod.Name, "image", display)
@@ -167,12 +179,20 @@ func (r *FunctionPodRequestReconciler) resolve(ctx context.Context, repository, 
 }
 
 func (r *FunctionPodRequestReconciler) failConstraint(ctx context.Context, request *v1alpha1.FunctionPodRequest, repository, constraint string) error {
-	base := util.DisplayName(repository, "")
+	base := displayName(repository, "")
 	message := fmt.Sprintf("no published tag satisfies %s for image %s", constraint, repository)
 	klog.InfoS("no published tag satisfies constraint", "request", request.Name, "namespace", request.Namespace, "image", repository, "constraint", constraint)
 	r.event(request, corev1.EventTypeWarning, fnpod.EventUnsatisfiable,
 		fmt.Sprintf("Cannot start pod for %s: no published tag satisfies %s", base, constraint))
 	return r.writeError(ctx, request, v1alpha1.FunctionPodRequestPhasePodManagementError, message)
+}
+
+func displayName(repository, version string) string {
+	base := image.Parse(repository).BaseName
+	if version == "" {
+		return base
+	}
+	return base + ":" + version
 }
 
 func (r *FunctionPodRequestReconciler) failPod(ctx context.Context, request *v1alpha1.FunctionPodRequest, pod *corev1.Pod, message string) error {
@@ -199,8 +219,7 @@ func (r *FunctionPodRequestReconciler) requestsForPod(ctx context.Context, obj c
 	}
 	var out []reconcile.Request
 	for i := range requests {
-		repo, err := repositoryOf(requests[i].Spec.Image, r.ImagePrefix)
-		if err != nil || repo != repository {
+		if repositoryOf(requests[i].Spec.Image, r.ImagePrefix) != repository {
 			continue
 		}
 		out = append(out, reconcile.Request{NamespacedName: types.NamespacedName{

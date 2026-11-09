@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/server"
 	"github.com/stretchr/testify/assert"
@@ -33,19 +34,21 @@ func TestFlagDefaults(t *testing.T) {
 	assert.Equal(t, 10*time.Minute, opts.RequestRetention)
 	assert.Equal(t, 5*time.Second, opts.ScaleUpDebounce)
 	assert.Equal(t, time.Minute, opts.ScanInterval)
+	assert.Equal(t, 8, opts.ReapParallelism)
 	assert.Equal(t, 30*time.Minute, opts.PodTTL)
 	assert.Equal(t, 2, opts.MaxWaitlistLength)
 	assert.Equal(t, 1, opts.MaxParallelPods)
 	assert.Equal(t, 60*time.Second, opts.PodReadyTimeout)
 	assert.True(t, opts.Warmup)
 	assert.True(t, opts.LeaderElection)
-	assert.Equal(t, fnpod.DefaultImagePrefix, opts.DefaultImagePrefix)
+	assert.Equal(t, runneroptions.GHCRImagePrefix, opts.DefaultImagePrefix)
 
 	flags := cmd.Flags()
 	require.NotNil(t, flags.Lookup("fn-request-namespace"))
 	require.NotNil(t, flags.Lookup("request-retention"))
 	require.NotNil(t, flags.Lookup("leader-elect"))
 	require.NotNil(t, flags.Lookup("pod-ttl"))
+	require.NotNil(t, flags.Lookup("reap-parallelism"))
 	require.NotNil(t, flags.Lookup("warm-up-pod-cache"))
 	assert.Nil(t, flags.Lookup("max-function-retries"))
 	assert.Nil(t, flags.Lookup("function-retry-interval"))

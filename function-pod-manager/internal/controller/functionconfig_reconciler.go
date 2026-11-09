@@ -17,7 +17,7 @@ package controller
 import (
 	"context"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

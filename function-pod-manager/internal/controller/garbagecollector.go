@@ -18,33 +18,37 @@ import (
 	"context"
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
-	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
+// DefaultReapParallelism is how many requests one scan reaps at once when the option is unset.
+const DefaultReapParallelism = 8
+
 // GarbageCollector reaps requests, deletes idle evaluator pods, and warms the pool.
 // It runs only on the leader.
 type GarbageCollector struct {
 	*FunctionPodRequestReconciler
-	ScanInterval  time.Duration
-	WarmupOnStart bool
+	ScanInterval    time.Duration
+	WarmupOnStart   bool
+	ReapParallelism int
 }
 
 // NeedLeaderElection keeps scaling and garbage collection on one replica.
-func (m *GarbageCollector) NeedLeaderElection() bool { return true }
+func (gc *GarbageCollector) NeedLeaderElection() bool { return true }
 
 // Start warms the pool, then reaps and garbage-collects on each scan.
-func (m *GarbageCollector) Start(ctx context.Context) error {
-	if err := m.WarmupAll(ctx); err != nil {
+func (gc *GarbageCollector) Start(ctx context.Context) error {
+	if err := gc.WarmupAll(ctx); err != nil {
 		klog.ErrorS(err, "function pod warmup failed")
 	}
-	interval := m.ScanInterval
+	interval := gc.ScanInterval
 	if interval <= 0 {
 		interval = time.Minute
 	}
@@ -56,7 +60,7 @@ func (m *GarbageCollector) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := m.Tick(ctx); err != nil {
+			if err := gc.Tick(ctx); err != nil {
 				klog.ErrorS(err, "function pod garbage collection failed")
 			}
 		}
@@ -64,61 +68,71 @@ func (m *GarbageCollector) Start(ctx context.Context) error {
 }
 
 // Tick reaps stale requests and deletes idle evaluator pods.
-func (m *GarbageCollector) Tick(ctx context.Context) error {
+func (gc *GarbageCollector) Tick(ctx context.Context) error {
 	klog.InfoS("function pod garbage collection called")
 	now := time.Now()
-	requests, err := m.listFunctionPodRequests(ctx)
+	requests, err := gc.listFunctionPodRequests(ctx)
 	if err != nil {
 		return err
 	}
-	pods, err := m.listPods(ctx)
+	pods, err := gc.listPods(ctx)
 	if err != nil {
 		return err
 	}
-	configs, err := m.listFunctionConfigs(ctx)
+	configs, err := gc.listFunctionConfigs(ctx)
 	if err != nil {
 		return err
 	}
-	if err := m.reapAll(ctx, requests, pods, now); err != nil {
+	if err := gc.reapAll(ctx, requests, pods, now); err != nil {
 		return err
 	}
-	if err := m.deleteExpiredErrors(ctx, requests, now); err != nil {
+	if err := gc.deleteExpiredErrors(ctx, requests, now); err != nil {
 		return err
 	}
-	return m.collectIdle(ctx, pods, requests, configs, now)
+	return gc.collectIdle(ctx, pods, requests, configs, now)
 }
 
 // WarmupAll starts one pod for each FunctionConfig whose first tag is a concrete version.
-func (m *GarbageCollector) WarmupAll(ctx context.Context) error {
-	if !m.WarmupOnStart {
+func (gc *GarbageCollector) WarmupAll(ctx context.Context) error {
+	if !gc.WarmupOnStart {
 		return nil
 	}
-	configs, err := m.listFunctionConfigs(ctx)
+	configs, err := gc.listFunctionConfigs(ctx)
 	if err != nil {
 		return err
 	}
-	pods, err := m.listPods(ctx)
+	pods, err := gc.listPods(ctx)
 	if err != nil {
 		return err
 	}
 	for i := range configs {
-		if err := m.Provisioner.Warmup(ctx, &configs[i], pods); err != nil {
+		if err := gc.Provisioner.Warmup(ctx, &configs[i], pods); err != nil {
 			klog.ErrorS(err, "warmup failed", "functionConfig", configs[i].Name)
 		}
 	}
 	return nil
 }
 
-func (m *GarbageCollector) reapAll(ctx context.Context, requests []v1alpha1.FunctionPodRequest, pods []corev1.Pod, now time.Time) error {
-	for i := range requests {
-		if _, err := m.reapOne(ctx, &requests[i], pods, now); err != nil {
-			return err
-		}
+func (gc *GarbageCollector) parallelism() int {
+	if gc.ReapParallelism <= 0 {
+		return DefaultReapParallelism
 	}
-	return nil
+	return gc.ReapParallelism
 }
 
-func (m *GarbageCollector) collectIdle(
+func (gc *GarbageCollector) reapAll(ctx context.Context, requests []v1alpha1.FunctionPodRequest, pods []corev1.Pod, now time.Time) error {
+	var group errgroup.Group
+	group.SetLimit(gc.parallelism())
+	for i := range requests {
+		group.Go(func() error {
+			_, err := gc.reapOne(ctx, &requests[i], pods, now)
+			return err
+		})
+	}
+	return group.Wait()
+}
+
+func (gc *GarbageCollector) collectIdle(
 	ctx context.Context,
 	pods []corev1.Pod,
 	requests []v1alpha1.FunctionPodRequest,
@@ -129,34 +143,34 @@ func (m *GarbageCollector) collectIdle(
 	for i := range pods {
 		pod := &pods[i]
 		if _, claimedPod := claimed[pod.Name]; claimedPod {
-			if err := m.clearIdle(ctx, pod); err != nil {
+			if err := gc.clearIdle(ctx, pod); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := m.markOrDeleteIdle(ctx, pod, configs, now); err != nil {
+		if err := gc.markOrDeleteIdle(ctx, pod, configs, now); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *GarbageCollector) clearIdle(ctx context.Context, pod *corev1.Pod) error {
+func (gc *GarbageCollector) clearIdle(ctx context.Context, pod *corev1.Pod) error {
 	if pod.Annotations[fnpod.AnnotationIdleSince] == "" {
 		return nil
 	}
 	delete(pod.Annotations, fnpod.AnnotationIdleSince)
-	return m.Update(ctx, pod)
+	return gc.Update(ctx, pod)
 }
 
-func (m *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Pod, configs []functionconfig.FunctionConfig, now time.Time) error {
+func (gc *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Pod, configs []functionconfig.FunctionConfig, now time.Time) error {
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
 	since := pod.Annotations[fnpod.AnnotationIdleSince]
 	if since == "" {
 		pod.Annotations[fnpod.AnnotationIdleSince] = now.UTC().Format(time.RFC3339)
-		return m.Update(ctx, pod)
+		return gc.Update(ctx, pod)
 	}
 	stamp, err := time.Parse(time.RFC3339, since)
 	if err != nil {
@@ -164,24 +178,24 @@ func (m *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Pod
 	}
 	repository := pod.Annotations[fnpod.AnnotationFunctionImage]
 	version := pod.Annotations[fnpod.AnnotationResolvedVersion]
-	ttl := limitsFor(configs, repository, version, m.ImagePrefix, m.Limits).PodTTL
+	ttl := limitsFor(configs, repository, version, gc.ImagePrefix, gc.Limits).PodTTL
 	if now.Sub(stamp) < ttl {
 		return nil
 	}
-	m.event(pod, corev1.EventTypeNormal, fnpod.EventDeletedIdle, "Deleted idle pod for "+util.DisplayName(repository, version))
-	if err := m.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
+	gc.event(pod, corev1.EventTypeNormal, fnpod.EventDeletedIdle, "Deleted idle pod for "+displayName(repository, version))
+	if err := gc.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	return m.deleteService(ctx, pod)
+	return gc.deleteService(ctx, pod)
 }
 
-func (m *GarbageCollector) deleteService(ctx context.Context, pod *corev1.Pod) error {
+func (gc *GarbageCollector) deleteService(ctx context.Context, pod *corev1.Pod) error {
 	name := pod.Labels[fnpod.LabelImage]
 	if name == "" {
 		return nil
 	}
 	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: pod.Namespace}}
-	if err := m.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
+	if err := gc.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	return nil

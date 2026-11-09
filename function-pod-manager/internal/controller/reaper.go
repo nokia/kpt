@@ -16,11 +16,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -69,29 +71,42 @@ func podNamed(pods []corev1.Pod, name string) bool {
 	return false
 }
 
-func (r *FunctionPodRequestReconciler) deleteExpiredErrors(ctx context.Context, requests []v1alpha1.FunctionPodRequest, now time.Time) error {
+func (gc *GarbageCollector) deleteExpiredErrors(ctx context.Context, requests []v1alpha1.FunctionPodRequest, now time.Time) error {
+	errs := make([]error, len(requests))
+	var group errgroup.Group
+	group.SetLimit(gc.parallelism())
 	for i := range requests {
-		request := &requests[i]
-		phase := request.Status.Phase
-		if phase != v1alpha1.FunctionPodRequestPhasePodManagementError && phase != v1alpha1.FunctionPodRequestPhaseEvaluationError {
-			continue
-		}
-		since := request.Annotations[fnpod.AnnotationErrorSince]
-		stamp, err := time.Parse(time.RFC3339, since)
-		if err != nil {
-			klog.ErrorS(err, "function pod request kept: missing or invalid error-since",
-				"request", request.Name, "namespace", request.Namespace, "phase", phase, "errorSince", since)
-			continue
-		}
-		elapsed := now.Sub(stamp)
-		if elapsed < r.Retention {
-			klog.InfoS("function pod request waiting for retention", "request", request.Name, "namespace", request.Namespace, "phase", phase, "remaining", r.Retention-elapsed)
-			continue
-		}
-		if err := r.Delete(ctx, request); err != nil {
-			return fmt.Errorf("delete expired request %s: %w", request.Name, err)
-		}
-		klog.InfoS("function pod request removed after retention", "request", request.Name, "namespace", request.Namespace, "phase", phase)
+		group.Go(func() error {
+			errs[i] = gc.deleteOneExpired(ctx, &requests[i], now)
+			return nil
+		})
 	}
+	if err := group.Wait(); err != nil {
+		return err
+	}
+	return errors.Join(errs...)
+}
+
+func (r *FunctionPodRequestReconciler) deleteOneExpired(ctx context.Context, request *v1alpha1.FunctionPodRequest, now time.Time) error {
+	phase := request.Status.Phase
+	if phase != v1alpha1.FunctionPodRequestPhasePodManagementError && phase != v1alpha1.FunctionPodRequestPhaseEvaluationError {
+		return nil
+	}
+	since := request.Annotations[fnpod.AnnotationErrorSince]
+	stamp, err := time.Parse(time.RFC3339, since)
+	if err != nil {
+		klog.ErrorS(err, "function pod request kept: missing or invalid error-since",
+			"request", request.Name, "namespace", request.Namespace, "phase", phase, "errorSince", since)
+		return nil
+	}
+	elapsed := now.Sub(stamp)
+	if elapsed < r.Retention {
+		klog.InfoS("function pod request waiting for retention", "request", request.Name, "namespace", request.Namespace, "phase", phase, "remaining", r.Retention-elapsed)
+		return nil
+	}
+	if err := r.Delete(ctx, request); err != nil {
+		return fmt.Errorf("delete expired request %s: %w", request.Name, err)
+	}
+	klog.InfoS("function pod request removed after retention", "request", request.Name, "namespace", request.Namespace, "phase", phase)
 	return nil
 }

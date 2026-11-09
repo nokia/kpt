@@ -31,10 +31,6 @@ const (
 	// AnnotationMatchedPod marks that the request was already told an evaluator can serve it.
 	AnnotationMatchedPod = "fn.kpt.dev/matched-pod"
 
-	// DefaultImagePrefix is the porch default for unqualified function names.
-	DefaultImagePrefix = "ghcr.io/kptdev/krm-functions-catalog"
-	// DefaultRegistry is the catalog registry that does not use the private-registry secret.
-	DefaultRegistry = "ghcr.io/kptdev/krm-functions-catalog"
 	// DefaultNamespace is the function namespace porch uses for evaluator pods.
 	DefaultNamespace = "porch-fn-system"
 	// WrapperServerImageEnv is the environment variable porch uses for the wrapper-server image.

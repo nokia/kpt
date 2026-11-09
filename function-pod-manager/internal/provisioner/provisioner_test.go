@@ -20,8 +20,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -122,7 +123,7 @@ func TestCreateEvaluatorReportsRegistryAndImageErrors(t *testing.T) {
 
 func TestCreateEvaluatorDoesNotAddAPullSecretForTheCatalog(t *testing.T) {
 	prov := newTestProvisioner(newFakeClient(t), true)
-	created, err := prov.CreateEvaluator(context.Background(), fnpod.DefaultRegistry+"/apply-replacements", "v1.0.7", nil, 0)
+	created, err := prov.CreateEvaluator(context.Background(), runneroptions.GHCRImagePrefix+"/apply-replacements", "v1.0.7", nil, 0)
 	require.NoError(t, err)
 	assert.Empty(t, created.Spec.ImagePullSecrets)
 }
@@ -186,7 +187,7 @@ func newTestProvisioner(kube client.Client, private bool) *Provisioner {
 	return New(kube, Config{
 		Namespace:               "fn-test",
 		WrapperServerImage:      "wrapper:test",
-		DefaultImagePrefix:      fnpod.DefaultImagePrefix,
+		DefaultImagePrefix:      runneroptions.GHCRImagePrefix,
 		EnablePrivateRegistries: private,
 		RegistryAuthSecretName:  "auth-secret",
 		ImageRegistry: &FakeImageRegistry{

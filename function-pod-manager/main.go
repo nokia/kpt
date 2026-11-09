@@ -58,6 +58,7 @@ func addFlags(cmd *cobra.Command, opts *server.Options) {
 	flags.DurationVar(&opts.RequestRetention, "request-retention", opts.RequestRetention, "How long error-phase requests are kept.")
 	flags.DurationVar(&opts.ScaleUpDebounce, "scale-up-debounce", opts.ScaleUpDebounce, "How long a request must stay Created before a new pod is started.")
 	flags.DurationVar(&opts.ScanInterval, "scan-interval", opts.ScanInterval, "The interval of GC between scans.")
+	flags.IntVar(&opts.ReapParallelism, "reap-parallelism", opts.ReapParallelism, "How many requests one garbage-collection scan reaps at once.")
 	flags.DurationVar(&opts.PodTTL, "pod-ttl", opts.PodTTL, "TTL for pods before GC.")
 	flags.BoolVar(&opts.Warmup, "warm-up-pod-cache", opts.Warmup, "If true, pods for concrete FunctionConfig tags are deployed at startup.")
 	flags.BoolVar(&opts.EnablePrivateRegistries, "enable-private-registries", opts.EnablePrivateRegistries,

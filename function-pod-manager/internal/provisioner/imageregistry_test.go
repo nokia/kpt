@@ -32,7 +32,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
-	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
+	"github.com/kptdev/kpt/api/runneroptions"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -66,7 +66,7 @@ func TestRemoteOptionsSkipPrivateTLSForThePublicCatalog(t *testing.T) {
 		TLSSecretPath:              t.TempDir(),
 	}}
 
-	opts, err := registry.remoteOptions(context.Background(), fnpod.DefaultRegistry+"/apply-replacements:v1.0.7")
+	opts, err := registry.remoteOptions(context.Background(), runneroptions.GHCRImagePrefix+"/apply-replacements:v1.0.7")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, opts)

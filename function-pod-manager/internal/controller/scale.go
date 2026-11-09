@@ -17,10 +17,11 @@ package controller
 import (
 	"time"
 
-	functionconfig "github.com/kptdev/kpt/function-pod-manager/api/functionconfig/v1alpha1"
+	"github.com/kptdev/kpt/api/utils/image"
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/internal/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/internal/provisioner/util"
+	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -40,31 +41,31 @@ type scaleResult struct {
 	pod        *corev1.Pod
 }
 
-func scaleRequest(
-	request *v1alpha1.FunctionPodRequest,
-	requests []v1alpha1.FunctionPodRequest,
-	pods []corev1.Pod,
-	configs []functionconfig.FunctionConfig,
-	prefix string,
-	defaults Limits,
-	now time.Time,
-) scaleResult {
-	repository, err := repositoryOf(request.Spec.Image, prefix)
-	if err != nil {
-		return scaleResult{action: scalePodFailed, message: err.Error()}
-	}
-	related := podsForRepository(pods, repository)
-	healthy, failed := splitPods(related, now, defaults.PodReadyTimeout)
-	satisfying := podsSatisfying(healthy, request.Spec.VersionConstraint)
+// scaler is the snapshot scale uses to decide whether a request needs another evaluator pod.
+type scaler struct {
+	request  *v1alpha1.FunctionPodRequest
+	requests []v1alpha1.FunctionPodRequest
+	pods     []corev1.Pod
+	configs  []functionconfig.FunctionConfig
+	prefix   string
+	defaults Limits
+	now      time.Time
+}
+
+func (s scaler) scale() scaleResult {
+	repository := repositoryOf(s.request.Spec.Image, s.prefix)
+	related := podsForRepository(s.pods, repository)
+	healthy, failed := splitPods(related, s.now, s.defaults.PodReadyTimeout)
+	satisfying := podsSatisfying(healthy, s.request.Spec.VersionConstraint)
 	if len(satisfying) > 0 {
-		return scaleExisting(requests, satisfying, healthy, configs, repository, prefix, defaults)
+		return s.existing(satisfying, healthy, repository)
 	}
-	if failedPod, message, ok := failedSatisfying(failed, request.Spec.VersionConstraint, now, defaults.PodReadyTimeout); ok {
+	if failedPod, message, ok := failedSatisfying(failed, s.request.Spec.VersionConstraint, s.now, s.defaults.PodReadyTimeout); ok {
 		return scaleResult{action: scalePodFailed, repository: repository, message: message, pod: failedPod}
 	}
-	if request.Spec.VersionConstraint == "" {
-		version, err := util.Tag(util.ResolveImage(request.Spec.Image, prefix))
-		if err != nil || version == "" {
+	if s.request.Spec.VersionConstraint == "" {
+		version := image.Parse(image.WithPrefix(s.request.Spec.Image, s.prefix)).Tag
+		if version == "" {
 			version = "latest"
 		}
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
@@ -72,20 +73,14 @@ func scaleRequest(
 	return scaleResult{action: scaleCreatePod, repository: repository}
 }
 
-func scaleExisting(
-	requests []v1alpha1.FunctionPodRequest,
-	satisfying, healthy []corev1.Pod,
-	configs []functionconfig.FunctionConfig,
-	repository, prefix string,
-	defaults Limits,
-) scaleResult {
+func (s scaler) existing(satisfying, healthy []corev1.Pod, repository string) scaleResult {
 	version := util.HighestVersion(versionsOf(satisfying))
 	matched := &satisfying[0]
 	if version == "" {
 		return scaleResult{action: scaleNone, repository: repository, pod: matched}
 	}
-	limits := limitsFor(configs, repository, version, prefix, defaults)
-	pending := pendingAgainst(requests, satisfying, repository, prefix)
+	limits := limitsFor(s.configs, repository, version, s.prefix, s.defaults)
+	pending := pendingAgainst(s.requests, satisfying, repository, s.prefix)
 	if pending > limits.PreferredQueue && len(healthy) < limits.MaxParallel {
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
@@ -157,8 +152,7 @@ func pendingAgainst(requests []v1alpha1.FunctionPodRequest, satisfying []corev1.
 		if phaseOf(&requests[i]) != v1alpha1.FunctionPodRequestPhaseCreated {
 			continue
 		}
-		repo, err := repositoryOf(requests[i].Spec.Image, prefix)
-		if err != nil || repo != repository {
+		if repositoryOf(requests[i].Spec.Image, prefix) != repository {
 			continue
 		}
 		if len(podsSatisfying(satisfying, requests[i].Spec.VersionConstraint)) > 0 {
@@ -168,8 +162,8 @@ func pendingAgainst(requests []v1alpha1.FunctionPodRequest, satisfying []corev1.
 	return pending
 }
 
-func repositoryOf(image, prefix string) (string, error) {
-	return util.Repository(util.ResolveImage(image, prefix))
+func repositoryOf(name, prefix string) string {
+	return image.Parse(image.WithPrefix(name, prefix)).Repository()
 }
 
 func podProblem(pod *corev1.Pod, now time.Time, timeout time.Duration) (string, bool) {
@@ -180,19 +174,20 @@ func podProblem(pod *corev1.Pod, now time.Time, timeout time.Duration) (string, 
 	if phase == "" {
 		phase = corev1.PodPending
 	}
-	if phase == corev1.PodSucceeded || phase == corev1.PodFailed {
+	reason := waitingReason(pod)
+	if !hardFailure(reason) {
+		reason = unschedulableReason(pod)
+	}
+	switch {
+	case phase == corev1.PodSucceeded || phase == corev1.PodFailed:
 		return string(phase), true
-	}
-	if reason := waitingReason(pod); hardFailure(reason) {
+	case reason != "":
 		return string(phase) + ": " + reason, true
-	}
-	if reason := unschedulableReason(pod); reason != "" {
-		return string(phase) + ": " + reason, true
-	}
-	if timeout > 0 && !pod.CreationTimestamp.IsZero() && now.Sub(pod.CreationTimestamp.Time) > timeout {
+	case timeout > 0 && !pod.CreationTimestamp.IsZero() && now.Sub(pod.CreationTimestamp.Time) > timeout:
 		return string(phase) + ": timed out waiting to be Ready", true
+	default:
+		return "", false
 	}
-	return "", false
 }
 
 func podReady(pod *corev1.Pod) bool {
