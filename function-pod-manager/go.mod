@@ -2,10 +2,6 @@ module github.com/kptdev/kpt/function-pod-manager
 
 go 1.26.8
 
-// runneroptions.GHCRImagePrefix is in this checkout. The released kpt API module does not contain it.
-// From the image build's /src, this path is /api.
-replace github.com/kptdev/kpt/api => ../api
-
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/google/go-containerregistry v0.21.6
@@ -13,11 +9,11 @@ require (
 	github.com/kptdev/porch/api v1.0.4-pre.3.0.20261104093325-f67ba85dbd09
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
+	golang.org/x/sync v0.22.0
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
 	k8s.io/klog/v2 v2.140.0
-	golang.org/x/sync v0.22.0
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 )
@@ -90,3 +86,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/kptdev/kpt/api => github.com/nokia/kpt/api v0.0.0-20261110090046-871b407a52d5
