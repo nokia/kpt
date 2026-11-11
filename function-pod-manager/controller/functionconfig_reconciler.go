@@ -18,6 +18,7 @@ import (
 	"context"
 
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,8 +26,9 @@ import (
 // FunctionConfigReconciler warms a pool when a FunctionConfig changes.
 type FunctionConfigReconciler struct {
 	client.Client
-	Pods   *FunctionPodRequestReconciler
-	Warmup bool
+	Pods                *FunctionPodRequestReconciler
+	FunctionConfigStore *FunctionConfigStore
+	Warmup              bool
 }
 
 // SetupWithManager watches FunctionConfig.
@@ -36,14 +38,27 @@ func (r *FunctionConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// Reconcile ensures a warmup pod for a concrete podExecutor tag.
+// Reconcile stores the FunctionConfig for later lookups and, when warmup is on,
+// ensures a pod for a concrete podExecutor tag.
 func (r *FunctionConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.Warmup || req.Namespace != r.Pods.PodNamespace {
+	if r.Pods == nil || req.Namespace != r.Pods.PodNamespace {
 		return ctrl.Result{}, nil
 	}
 	cfg := &functionconfig.FunctionConfig{}
 	if err := r.Get(ctx, req.NamespacedName, cfg); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if apierrors.IsNotFound(err) {
+			r.FunctionConfigStore.delete(req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	if !cfg.DeletionTimestamp.IsZero() {
+		r.FunctionConfigStore.delete(req.NamespacedName)
+		return ctrl.Result{}, nil
+	}
+	r.FunctionConfigStore.upsert(cfg)
+	if !r.Warmup {
+		return ctrl.Result{}, nil
 	}
 	pods, err := r.Pods.listPods(ctx)
 	if err != nil {

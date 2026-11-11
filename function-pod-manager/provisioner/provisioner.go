@@ -18,6 +18,8 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -67,7 +69,12 @@ func (p *Provisioner) ListTags(ctx context.Context, repository string) ([]string
 }
 
 // CreateEvaluator creates a Function Evaluator pod and its Service for repository:version.
-func (p *Provisioner) CreateEvaluator(ctx context.Context, repository, version string, exec *functionconfig.PodExecutorConfig, postfix int) (*corev1.Pod, error) {
+func (p *Provisioner) CreateEvaluator(
+	ctx context.Context,
+	repository, version string,
+	exec *functionconfig.PodExecutorConfig,
+	postfix int,
+) (*corev1.Pod, error) {
 	if p.cfg.WrapperServerImage == "" {
 		return nil, fmt.Errorf("wrapper server image is empty; set %s", fnpod.WrapperServerImageEnv)
 	}
@@ -77,6 +84,10 @@ func (p *Provisioner) CreateEvaluator(ctx context.Context, repository, version s
 		return nil, err
 	}
 	podID, err := podID(image, meta.Digest, strconv.Itoa(postfix))
+	if err != nil {
+		return nil, err
+	}
+	serviceName, err := functionServiceName(repository)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +107,7 @@ func (p *Provisioner) CreateEvaluator(ctx context.Context, repository, version s
 	if exec != nil {
 		util.MergeTemplateOverrides(&spec, exec.TemplateOverrides)
 	}
-	patchPodIdentity(&spec, p.cfg.Namespace, podID, template.ResourceVersion, repository, version)
+	patchPodIdentity(&spec, p.cfg.Namespace, serviceName, template.ResourceVersion, repository, version, postfix)
 	spec.GenerateName = podID + "-"
 	pod := &corev1.Pod{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
@@ -106,7 +117,7 @@ func (p *Provisioner) CreateEvaluator(ctx context.Context, repository, version s
 	if err := p.client.Create(ctx, pod); err != nil {
 		return nil, fmt.Errorf("create evaluator pod for %s: %w", image, err)
 	}
-	if _, err := p.ensureService(ctx, podID); err != nil {
+	if _, err := p.ensureService(ctx, serviceName); err != nil {
 		return nil, err
 	}
 	klog.InfoS("created function evaluator pod", "namespace", pod.Namespace, "name", pod.Name, "image", image)
@@ -130,7 +141,7 @@ func (p *Provisioner) Warmup(ctx context.Context, cfg *functionconfig.FunctionCo
 			return nil
 		}
 	}
-	_, err := p.CreateEvaluator(ctx, repository, tag, cfg.Spec.PodExecutor, len(existing))
+	_, err := p.CreateEvaluator(ctx, repository, tag, cfg.Spec.PodExecutor, NextPodIndex(peersOf(existing, repository)))
 	return err
 }
 
@@ -232,7 +243,7 @@ func (p *Provisioner) appendImagePullSecret(image string, pod *corev1.PodTemplat
 	})
 }
 
-func patchPodIdentity(pod *corev1.PodTemplateSpec, namespace, podID, templateVersion, repository, version string) {
+func patchPodIdentity(pod *corev1.PodTemplateSpec, namespace, serviceName, templateVersion, repository, version string, postfix int) {
 	pod.Namespace = namespace
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
@@ -240,10 +251,84 @@ func patchPodIdentity(pod *corev1.PodTemplateSpec, namespace, podID, templateVer
 	pod.Annotations[fnpod.AnnotationTemplateVersion] = templateVersion
 	pod.Annotations[fnpod.AnnotationFunctionImage] = repository
 	pod.Annotations[fnpod.AnnotationResolvedVersion] = version
+	pod.Annotations[fnpod.AnnotationPodIndex] = strconv.Itoa(postfix)
 	if pod.Labels == nil {
 		pod.Labels = map[string]string{}
 	}
-	pod.Labels[fnpod.LabelImage] = podID
+	pod.Labels[fnpod.LabelImage] = serviceName
+}
+
+// functionServiceName is one Service for every pod of a function. Pods claim a single request,
+// so callers do not need a Service that points at one pod.
+func functionServiceName(repository string) (string, error) {
+	repo, err := name.NewRepository(repository)
+	if err != nil {
+		return "", fmt.Errorf("parse repository %q: %w", repository, err)
+	}
+	parts := strings.Split(repo.RepositoryStr(), "/")
+	base := strings.ToLower(strings.ReplaceAll(parts[len(parts)-1], "_", "-"))
+	base = strings.Trim(base, "-.")
+	if base == "" {
+		return "", fmt.Errorf("repository %q has no function name", repository)
+	}
+	if len(base) > 63 {
+		base = strings.Trim(base[:63], "-.")
+	}
+	return base, nil
+}
+
+// NextPodIndex is the lowest unused postfix, starting at 1. A pod records its postfix in
+// AnnotationPodIndex; a pod created before that annotation still reserves the number in its name.
+func NextPodIndex(pods []corev1.Pod) int {
+	indexes := make([]int, 0, len(pods))
+	for i := range pods {
+		if n, ok := podIndex(pods[i]); ok {
+			indexes = append(indexes, n)
+		}
+	}
+	slices.Sort(indexes)
+	idx := 1
+	for _, n := range indexes {
+		if idx < n {
+			break
+		}
+		idx++
+	}
+	return idx
+}
+
+func peersOf(pods []corev1.Pod, repository string) []corev1.Pod {
+	var peers []corev1.Pod
+	for i := range pods {
+		if pods[i].Annotations[fnpod.AnnotationFunctionImage] == repository {
+			peers = append(peers, pods[i])
+		}
+	}
+	return peers
+}
+
+var podIndexInName = regexp.MustCompile(`-(\d+)-[0-9a-fA-F]{8}(?:-|$)`)
+
+func podIndex(pod corev1.Pod) (int, bool) {
+	if raw := pod.Annotations[fnpod.AnnotationPodIndex]; raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err == nil && n > 0 {
+			return n, true
+		}
+	}
+	name := pod.Name
+	if name == "" {
+		name = strings.TrimSuffix(pod.GenerateName, "-")
+	}
+	matches := podIndexInName.FindAllStringSubmatch(name, -1)
+	if len(matches) == 0 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(matches[len(matches)-1][1])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 func podID(image, digest, postfix string) (string, error) {

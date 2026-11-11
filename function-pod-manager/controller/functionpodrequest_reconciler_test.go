@@ -89,8 +89,8 @@ func TestQueueStartsAnotherPodAtTheSameVersion(t *testing.T) {
 	pod := readyPod("eval-a")
 	cfg := functionConfig(1, 2, []string{"*"})
 	reconciler, kube, _ := newHarness(t, first, second, pod, cfg)
-	reconciler.Limits.PreferredQueue = 1
-	reconciler.Limits.MaxParallel = 2
+	reconciler.PodPoolPolicy.PreferredMaxQueueLength = 1
+	reconciler.PodPoolPolicy.MaxParallelExecutions = 2
 
 	_, err := reconciler.Reconcile(context.Background(), namespacedRequest("one"))
 	require.NoError(t, err)
@@ -103,8 +103,8 @@ func TestQueueRespectsParallelCap(t *testing.T) {
 	second := newRequest("two", "~1.0.3", v1alpha1.FunctionPodRequestPhaseCreated)
 	pod := readyPod("eval-a")
 	reconciler, kube, _ := newHarness(t, first, second, pod)
-	reconciler.Limits.PreferredQueue = 1
-	reconciler.Limits.MaxParallel = 1
+	reconciler.PodPoolPolicy.PreferredMaxQueueLength = 1
+	reconciler.PodPoolPolicy.MaxParallelExecutions = 1
 
 	_, err := reconciler.Reconcile(context.Background(), namespacedRequest("one"))
 	require.NoError(t, err)
@@ -222,6 +222,35 @@ func TestIdlePodIsDeletedAndClaimedPodIsKept(t *testing.T) {
 	assert.Contains(t, deleted[0], displayName(testKrmFunction, "v1.0.7"))
 }
 
+func TestSharedServiceStaysUntilTheLastFunctionPodIsGone(t *testing.T) {
+	idle := readyPod("idle-pod")
+	idle.Labels[fnpod.LabelImage] = "apply-replacements"
+	idle.Annotations[fnpod.AnnotationIdleSince] = time.Now().Add(-31 * time.Minute).UTC().Format(time.RFC3339)
+	peer := readyPod("peer-pod")
+	peer.Labels[fnpod.LabelImage] = "apply-replacements"
+	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "apply-replacements", Namespace: testNamespace}}
+	reconciler, kube, _ := newHarness(t, idle, peer, service)
+	collector := &GarbageCollector{FunctionPodRequestReconciler: reconciler}
+
+	require.NoError(t, collector.Tick(context.Background()))
+
+	err := kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "idle-pod"}, &corev1.Pod{})
+	assert.True(t, apierrors.IsNotFound(err))
+	require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "apply-replacements"}, &corev1.Service{}))
+
+	stored := &corev1.Pod{}
+	require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "peer-pod"}, stored))
+	stored.Annotations[fnpod.AnnotationIdleSince] = time.Now().Add(-31 * time.Minute).UTC().Format(time.RFC3339)
+	require.NoError(t, kube.Update(context.Background(), stored))
+
+	require.NoError(t, collector.Tick(context.Background()))
+
+	err = kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "peer-pod"}, &corev1.Pod{})
+	assert.True(t, apierrors.IsNotFound(err))
+	err = kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "apply-replacements"}, &corev1.Service{})
+	assert.True(t, apierrors.IsNotFound(err))
+}
+
 func TestWarmupConcreteTagSkipsRange(t *testing.T) {
 	concrete := functionConfig(0, 0, []string{"v1.2.3"})
 	concrete.Name = "concrete"
@@ -273,19 +302,20 @@ func newHarness(t *testing.T, objs ...client.Object) (*FunctionPodRequestReconci
 		},
 	})
 	reconciler := &FunctionPodRequestReconciler{
-		Client:           kube,
-		Recorder:         events,
-		Provisioner:      prov,
-		RequestNamespace: testNamespace,
-		PodNamespace:     testNamespace,
-		ImagePrefix:      runneroptions.GHCRImagePrefix,
-		Debounce:         5 * time.Second,
-		Retention:        10 * time.Minute,
-		Limits: Limits{
-			PreferredQueue:  2,
-			MaxParallel:     1,
-			PodTTL:          30 * time.Minute,
-			PodReadyTimeout: 60 * time.Second,
+		Client:              kube,
+		Recorder:            events,
+		Provisioner:         prov,
+		RequestNamespace:    testNamespace,
+		PodNamespace:        testNamespace,
+		ImagePrefix:         runneroptions.GHCRImagePrefix,
+		Debounce:            5 * time.Second,
+		Retention:           10 * time.Minute,
+		FunctionConfigStore: NewFunctionConfigStore(),
+		PodPoolPolicy: PodPoolPolicy{
+			PreferredMaxQueueLength: 2,
+			MaxParallelExecutions:   1,
+			PodTTL:                  30 * time.Minute,
+			PodReadyTimeout:         60 * time.Second,
 		},
 	}
 	return reconciler, kube, events

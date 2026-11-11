@@ -37,12 +37,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// Limits are the pool defaults from pod-lifecycle flags.
-type Limits struct {
-	PreferredQueue  int
-	MaxParallel     int
-	PodTTL          time.Duration
-	PodReadyTimeout time.Duration
+// PodPoolPolicy are the pool defaults from pod-lifecycle flags.
+type PodPoolPolicy struct {
+	PreferredMaxQueueLength int
+	MaxParallelExecutions   int
+	PodTTL                  time.Duration
+	PodReadyTimeout         time.Duration
 }
 
 // FunctionPodRequestReconciler ensures a Function Evaluator pod can claim each request.
@@ -56,8 +56,9 @@ type FunctionPodRequestReconciler struct {
 	// Debounce is how long a request must stay Created before a new evaluator pod is started.
 	Debounce time.Duration
 	// Retention is how long a PodManagementError or EvaluationError request is kept before it is deleted.
-	Retention time.Duration
-	Limits    Limits
+	Retention           time.Duration
+	PodPoolPolicy       PodPoolPolicy
+	FunctionConfigStore *FunctionConfigStore
 }
 
 // SetupWithManager watches requests and the evaluator pods that can claim them.
@@ -86,11 +87,12 @@ func (r *FunctionPodRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	configs, err := r.listFunctionConfigs(ctx)
-	if err != nil {
+	if err := r.FunctionConfigStore.sync(func() ([]functionconfig.FunctionConfig, error) {
+		return r.listFunctionConfigs(ctx)
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
-	return r.reconcile(ctx, request, requests, pods, configs, now)
+	return r.reconcile(ctx, request, requests, pods, now)
 }
 
 func (r *FunctionPodRequestReconciler) reconcile(
@@ -98,7 +100,6 @@ func (r *FunctionPodRequestReconciler) reconcile(
 	request *v1alpha1.FunctionPodRequest,
 	requests []v1alpha1.FunctionPodRequest,
 	pods []corev1.Pod,
-	configs []functionconfig.FunctionConfig,
 	now time.Time,
 ) (ctrl.Result, error) {
 	if done, err := r.reapOne(ctx, request, pods, now); done || err != nil {
@@ -115,16 +116,16 @@ func (r *FunctionPodRequestReconciler) reconcile(
 		request:  request,
 		requests: requests,
 		pods:     pods,
-		configs:  configs,
+		configs:  r.FunctionConfigStore,
 		prefix:   r.ImagePrefix,
-		defaults: r.Limits,
+		defaults: r.PodPoolPolicy,
 		now:      now,
 	}.scale()
 	switch result.action {
 	case scalePodFailed:
 		return ctrl.Result{}, r.failPod(ctx, request, result.pod, result.message)
 	case scaleCreatePod:
-		return r.startPod(ctx, request, result, pods, configs)
+		return r.startPod(ctx, request, result, pods)
 	default:
 		if err := r.noteMatchingPod(ctx, request, result.pod); err != nil {
 			return ctrl.Result{}, err
@@ -138,7 +139,6 @@ func (r *FunctionPodRequestReconciler) startPod(
 	request *v1alpha1.FunctionPodRequest,
 	result scaleResult,
 	pods []corev1.Pod,
-	configs []functionconfig.FunctionConfig,
 ) (ctrl.Result, error) {
 	version := result.version
 	if version == "" {
@@ -152,9 +152,9 @@ func (r *FunctionPodRequestReconciler) startPod(
 			return ctrl.Result{}, r.writeError(ctx, request, v1alpha1.FunctionPodRequestPhasePodManagementError, err.Error())
 		}
 	}
-	exec := executorFor(configs, result.repository, version, r.ImagePrefix)
-	postfix := podsForRepository(pods, result.repository)
-	pod, err := r.Provisioner.CreateEvaluator(ctx, result.repository, version, exec, len(postfix))
+	exec := r.FunctionConfigStore.executor(result.repository, version, r.ImagePrefix)
+	postfix := provisioner.NextPodIndex(podsForRepository(pods, result.repository))
+	pod, err := r.Provisioner.CreateEvaluator(ctx, result.repository, version, exec, postfix)
 	if err != nil {
 		message := err.Error()
 		r.event(request, corev1.EventTypeWarning, fnpod.EventStartFailed, "Failed to start new pod: "+message)
@@ -164,7 +164,7 @@ func (r *FunctionPodRequestReconciler) startPod(
 	r.event(pod, corev1.EventTypeNormal, fnpod.EventStarting, "Starting new pod for "+display)
 	r.event(request, corev1.EventTypeNormal, fnpod.EventStarting, "Started evaluator pod "+pod.Name+" for "+display)
 	klog.InfoS("function pod request started evaluator", "request", request.Name, "namespace", request.Namespace, "pod", pod.Name, "image", display)
-	return ctrl.Result{RequeueAfter: r.Limits.PodReadyTimeout}, nil
+	return ctrl.Result{RequeueAfter: r.PodPoolPolicy.PodReadyTimeout}, nil
 }
 
 func (r *FunctionPodRequestReconciler) resolve(ctx context.Context, repository, constraint string) (string, error) {
