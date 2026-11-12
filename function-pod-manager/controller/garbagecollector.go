@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // DefaultReapParallelism is how many requests one scan reaps at once when the option is unset.
@@ -79,8 +80,9 @@ func (gc *GarbageCollector) Tick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	configs, err := gc.listFunctionConfigs(ctx)
-	if err != nil {
+	if err := gc.FunctionConfigStore.sync(func() ([]functionconfig.FunctionConfig, error) {
+		return gc.listFunctionConfigs(ctx)
+	}); err != nil {
 		return err
 	}
 	if err := gc.reapAll(ctx, requests, pods, now); err != nil {
@@ -89,7 +91,7 @@ func (gc *GarbageCollector) Tick(ctx context.Context) error {
 	if err := gc.deleteExpiredErrors(ctx, requests, now); err != nil {
 		return err
 	}
-	return gc.collectIdle(ctx, pods, requests, configs, now)
+	return gc.collectIdle(ctx, pods, requests, now)
 }
 
 // WarmupAll starts one pod for each FunctionConfig whose first tag is a concrete version.
@@ -136,7 +138,6 @@ func (gc *GarbageCollector) collectIdle(
 	ctx context.Context,
 	pods []corev1.Pod,
 	requests []v1alpha1.FunctionPodRequest,
-	configs []functionconfig.FunctionConfig,
 	now time.Time,
 ) error {
 	claimed := claimedPodNames(requests)
@@ -148,7 +149,7 @@ func (gc *GarbageCollector) collectIdle(
 			}
 			continue
 		}
-		if err := gc.markOrDeleteIdle(ctx, pod, configs, now); err != nil {
+		if err := gc.markOrDeleteIdle(ctx, pod, now); err != nil {
 			return err
 		}
 	}
@@ -163,7 +164,7 @@ func (gc *GarbageCollector) clearIdle(ctx context.Context, pod *corev1.Pod) erro
 	return gc.Update(ctx, pod)
 }
 
-func (gc *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Pod, configs []functionconfig.FunctionConfig, now time.Time) error {
+func (gc *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Pod, now time.Time) error {
 	if pod.Annotations == nil {
 		pod.Annotations = map[string]string{}
 	}
@@ -178,7 +179,7 @@ func (gc *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Po
 	}
 	repository := pod.Annotations[fnpod.AnnotationFunctionImage]
 	version := pod.Annotations[fnpod.AnnotationResolvedVersion]
-	ttl := limitsFor(configs, repository, version, gc.ImagePrefix, gc.Limits).PodTTL
+	ttl := gc.FunctionConfigStore.getPodPoolPolicy(repository, version, gc.ImagePrefix, gc.PodPoolPolicy).PodTTL
 	if now.Sub(stamp) < ttl {
 		return nil
 	}
@@ -192,6 +193,16 @@ func (gc *GarbageCollector) markOrDeleteIdle(ctx context.Context, pod *corev1.Po
 func (gc *GarbageCollector) deleteService(ctx context.Context, pod *corev1.Pod) error {
 	name := pod.Labels[fnpod.LabelImage]
 	if name == "" {
+		return nil
+	}
+	peers := &corev1.PodList{}
+	if err := gc.List(ctx, peers, client.InNamespace(pod.Namespace), client.MatchingLabels{fnpod.LabelImage: name}); err != nil {
+		return err
+	}
+	for i := range peers.Items {
+		if peers.Items[i].Name == pod.Name || !peers.Items[i].DeletionTimestamp.IsZero() {
+			continue
+		}
 		return nil
 	}
 	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: pod.Namespace}}

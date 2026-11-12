@@ -142,7 +142,7 @@ func TestFunctionConfigReconcileWarmsAConcreteTag(t *testing.T) {
 	cfg := functionConfig(1, 2, []string{"v1.2.3"})
 	cfg.Spec.PodExecutor.TimeToLive = metav1.Duration{Duration: time.Hour}
 	reconciler, kube, _ := newHarness(t, cfg)
-	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, Warmup: true}
+	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: true}
 
 	_, err := configs.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: testNamespace, Name: cfg.Name,
@@ -154,7 +154,7 @@ func TestFunctionConfigReconcileWarmsAConcreteTag(t *testing.T) {
 
 func TestFunctionConfigReconcileSkipsWhenWarmupIsOffOrTheObjectIsGone(t *testing.T) {
 	reconciler, kube, _ := newHarness(t)
-	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, Warmup: false}
+	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: false}
 
 	result, err := configs.Reconcile(context.Background(), namespacedRequest("missing"))
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestFunctionConfigReconcileReturnsAListError(t *testing.T) {
 			return nil
 		},
 	})
-	configs := &FunctionConfigReconciler{Client: failing, Pods: reconciler, Warmup: true}
+	configs := &FunctionConfigReconciler{Client: failing, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: true}
 	reconciler.Client = failing
 
 	_, err := configs.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{
@@ -192,15 +192,17 @@ func TestFunctionConfigReconcileReturnsAListError(t *testing.T) {
 func TestWildcardFunctionConfigSuppliesTheLimits(t *testing.T) {
 	cfg := functionConfig(4, 3, []string{"*"})
 	cfg.Spec.PodExecutor.TimeToLive = metav1.Duration{Duration: 15 * time.Minute}
-	defaults := Limits{PreferredQueue: 2, MaxParallel: 1, PodTTL: time.Hour}
+	defaults := PodPoolPolicy{PreferredMaxQueueLength: 2, MaxParallelExecutions: 1, PodTTL: time.Hour}
+	cache := NewFunctionConfigStore()
+	cache.upsert(cfg)
 
-	got := limitsFor([]functionconfig.FunctionConfig{*cfg}, testKrmFunction, "v9.9.9", runneroptions.GHCRImagePrefix, defaults)
+	got := cache.getPodPoolPolicy(testKrmFunction, "v9.9.9", runneroptions.GHCRImagePrefix, defaults)
 
-	assert.Equal(t, 4, got.PreferredQueue)
-	assert.Equal(t, 3, got.MaxParallel)
+	assert.Equal(t, 4, got.PreferredMaxQueueLength)
+	assert.Equal(t, 3, got.MaxParallelExecutions)
 	assert.Equal(t, 15*time.Minute, got.PodTTL)
 	assert.False(t, containsStar(nil))
-	assert.Nil(t, executorFor([]functionconfig.FunctionConfig{{}}, testKrmFunction, "v1", runneroptions.GHCRImagePrefix))
+	assert.Nil(t, NewFunctionConfigStore().executor(testKrmFunction, "v1", runneroptions.GHCRImagePrefix))
 }
 
 func TestGarbageCollectorStartStopsWhenTheContextEnds(t *testing.T) {
