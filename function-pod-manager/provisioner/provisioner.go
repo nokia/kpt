@@ -72,7 +72,7 @@ func (p *Provisioner) ListTags(ctx context.Context, repository string) ([]string
 func (p *Provisioner) CreateEvaluator(
 	ctx context.Context,
 	repository, version string,
-	exec *functionconfig.PodExecutorConfig,
+	config *functionconfig.PodExecutorConfig,
 	postfix int,
 ) (*corev1.Pod, error) {
 	if p.cfg.WrapperServerImage == "" {
@@ -104,8 +104,8 @@ func (p *Provisioner) CreateEvaluator(
 	if err := util.PatchFunctionContainer(&spec, meta.Entrypoint, image); err != nil {
 		return nil, err
 	}
-	if exec != nil {
-		util.MergeTemplateOverrides(&spec, exec.TemplateOverrides)
+	if config != nil {
+		util.MergeTemplateOverrides(&spec, config.TemplateOverrides)
 	}
 	patchPodIdentity(&spec, p.cfg.Namespace, serviceName, template.ResourceVersion, repository, version, postfix)
 	spec.GenerateName = podID + "-"

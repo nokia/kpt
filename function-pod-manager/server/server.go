@@ -136,10 +136,10 @@ func Start(ctx context.Context, opts Options) error {
 		return fmt.Errorf("setup request controller: %w", err)
 	}
 	configs := &controller.FunctionConfigReconciler{
-		Client:              mgr.GetClient(),
-		Pods:                requests,
-		FunctionConfigStore: store,
-		Warmup:              opts.Warmup,
+		Client: mgr.GetClient(),
+		Pods:   requests,
+		Store:  store,
+		Warmup: opts.Warmup,
 	}
 	if err := configs.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup function config controller: %w", err)

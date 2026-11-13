@@ -142,7 +142,7 @@ func TestFunctionConfigReconcileWarmsAConcreteTag(t *testing.T) {
 	cfg := functionConfig(1, 2, []string{"v1.2.3"})
 	cfg.Spec.PodExecutor.TimeToLive = metav1.Duration{Duration: time.Hour}
 	reconciler, kube, _ := newHarness(t, cfg)
-	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: true}
+	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, Store: reconciler.FunctionConfigStore, Warmup: true}
 
 	_, err := configs.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: testNamespace, Name: cfg.Name,
@@ -154,7 +154,7 @@ func TestFunctionConfigReconcileWarmsAConcreteTag(t *testing.T) {
 
 func TestFunctionConfigReconcileSkipsWhenWarmupIsOffOrTheObjectIsGone(t *testing.T) {
 	reconciler, kube, _ := newHarness(t)
-	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: false}
+	configs := &FunctionConfigReconciler{Client: kube, Pods: reconciler, Store: reconciler.FunctionConfigStore, Warmup: false}
 
 	result, err := configs.Reconcile(context.Background(), namespacedRequest("missing"))
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestFunctionConfigReconcileReturnsAListError(t *testing.T) {
 			return nil
 		},
 	})
-	configs := &FunctionConfigReconciler{Client: failing, Pods: reconciler, FunctionConfigStore: reconciler.FunctionConfigStore, Warmup: true}
+	configs := &FunctionConfigReconciler{Client: failing, Pods: reconciler, Store: reconciler.FunctionConfigStore, Warmup: true}
 	reconciler.Client = failing
 
 	_, err := configs.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{

@@ -26,9 +26,9 @@ import (
 // FunctionConfigReconciler warms a pool when a FunctionConfig changes.
 type FunctionConfigReconciler struct {
 	client.Client
-	Pods                *FunctionPodRequestReconciler
-	FunctionConfigStore *FunctionConfigStore
-	Warmup              bool
+	Pods   *FunctionPodRequestReconciler
+	Store  *FunctionConfigStore
+	Warmup bool
 }
 
 // SetupWithManager watches FunctionConfig.
@@ -47,16 +47,16 @@ func (r *FunctionConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	cfg := &functionconfig.FunctionConfig{}
 	if err := r.Get(ctx, req.NamespacedName, cfg); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.FunctionConfigStore.delete(req.NamespacedName)
+			r.Store.delete(req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
 	if !cfg.DeletionTimestamp.IsZero() {
-		r.FunctionConfigStore.delete(req.NamespacedName)
+		r.Store.delete(req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
-	r.FunctionConfigStore.upsert(cfg)
+	r.Store.upsert(cfg)
 	if !r.Warmup {
 		return ctrl.Result{}, nil
 	}

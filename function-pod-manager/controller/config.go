@@ -31,9 +31,9 @@ type FunctionConfigStore struct {
 }
 
 type cachedFunctionConfig struct {
-	key   types.NamespacedName
-	image string
-	exec  *functionconfig.PodExecutorConfig
+	key    types.NamespacedName
+	image  string
+	config *functionconfig.PodExecutorConfig
 }
 
 // NewFunctionConfigStore returns an empty store. synced is false until the first sync.
@@ -61,8 +61,8 @@ func (s *FunctionConfigStore) sync(list func() ([]functionconfig.FunctionConfig,
 	}
 	for i := range items {
 		key := types.NamespacedName{Namespace: items[i].Namespace, Name: items[i].Name}
-		if !s.hasLocked(key) {
-			s.insertLocked(&items[i])
+		if !s.has(key) {
+			s.insert(&items[i])
 		}
 	}
 	s.synced = true
@@ -76,11 +76,11 @@ func (s *FunctionConfigStore) upsert(obj *functionconfig.FunctionConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
-	if s.hasLocked(key) {
-		s.replaceLocked(obj)
+	if s.has(key) {
+		s.replace(obj)
 		return
 	}
-	s.insertLocked(obj)
+	s.insert(obj)
 }
 
 func (s *FunctionConfigStore) delete(key types.NamespacedName) {
@@ -121,21 +121,21 @@ func (s *FunctionConfigStore) executor(repository, version, prefix string) *func
 	defer s.mu.RUnlock()
 	var wildcard *functionconfig.PodExecutorConfig
 	for i := range s.items {
-		exec := s.items[i].exec
-		if exec == nil || repositoryOf(s.items[i].image, prefix) != repository {
+		config := s.items[i].config
+		if config == nil || repositoryOf(s.items[i].image, prefix) != repository {
 			continue
 		}
-		if util.TagsMatch(version, exec.Tags) {
-			return exec
+		if util.TagsMatch(version, config.Tags) {
+			return config
 		}
-		if len(exec.Tags) == 0 || containsStar(exec.Tags) {
-			wildcard = exec
+		if len(config.Tags) == 0 || containsStar(config.Tags) {
+			wildcard = config
 		}
 	}
 	return wildcard
 }
 
-func (s *FunctionConfigStore) hasLocked(key types.NamespacedName) bool {
+func (s *FunctionConfigStore) has(key types.NamespacedName) bool {
 	for i := range s.items {
 		if s.items[i].key == key {
 			return true
@@ -144,7 +144,7 @@ func (s *FunctionConfigStore) hasLocked(key types.NamespacedName) bool {
 	return false
 }
 
-func (s *FunctionConfigStore) replaceLocked(obj *functionconfig.FunctionConfig) {
+func (s *FunctionConfigStore) replace(obj *functionconfig.FunctionConfig) {
 	key := types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name}
 	for i := range s.items {
 		if s.items[i].key == key {
@@ -154,19 +154,19 @@ func (s *FunctionConfigStore) replaceLocked(obj *functionconfig.FunctionConfig) 
 	}
 }
 
-func (s *FunctionConfigStore) insertLocked(obj *functionconfig.FunctionConfig) {
+func (s *FunctionConfigStore) insert(obj *functionconfig.FunctionConfig) {
 	s.items = append(s.items, cachedFrom(obj))
 }
 
 func cachedFrom(obj *functionconfig.FunctionConfig) cachedFunctionConfig {
-	var exec *functionconfig.PodExecutorConfig
+	var config *functionconfig.PodExecutorConfig
 	if obj.Spec.PodExecutor != nil {
-		exec = obj.Spec.PodExecutor.DeepCopy()
+		config = obj.Spec.PodExecutor.DeepCopy()
 	}
 	return cachedFunctionConfig{
-		key:   types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name},
-		image: obj.Spec.Image,
-		exec:  exec,
+		key:    types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name},
+		image:  obj.Spec.Image,
+		config: config,
 	}
 }
 

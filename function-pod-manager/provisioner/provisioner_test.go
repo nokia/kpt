@@ -81,14 +81,14 @@ func TestCreateEvaluatorReusesTheServiceAndAppliesOverrides(t *testing.T) {
 	kube := newFakeClient(t)
 	prov := newTestProvisioner(kube, true)
 	runAs := int64(65532)
-	exec := &functionconfig.PodExecutorConfig{TemplateOverrides: &functionconfig.TemplateOverrides{
+	config := &functionconfig.PodExecutorConfig{TemplateOverrides: &functionconfig.TemplateOverrides{
 		ServiceAccountName: "function",
 		SecurityContext:    &corev1.PodSecurityContext{RunAsUser: &runAs},
 	}}
 
-	first, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.2.3", exec, 0)
+	first, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.2.3", config, 0)
 	require.NoError(t, err)
-	second, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.0.0", exec, 1)
+	second, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.0.0", config, 1)
 	require.NoError(t, err)
 
 	assert.Equal(t, "function", first.Spec.ServiceAccountName)
