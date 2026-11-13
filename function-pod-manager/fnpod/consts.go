@@ -16,12 +16,14 @@
 package fnpod
 
 const (
-	// LabelImage is the porch selector label. Its value is the stable pod id, not the image reference.
+	// LabelImage selects every evaluator pod of one function. Its value is the Service name.
 	LabelImage = "fn.kpt.dev/image"
 	// AnnotationTemplateVersion records the PodTemplate resourceVersion used to build the pod.
 	AnnotationTemplateVersion = "fn.kpt.dev/template-version"
 	// AnnotationResolvedVersion is the concrete tag the evaluator pod was started with.
 	AnnotationResolvedVersion = "fn.kpt.dev/resolved-version"
+	// AnnotationPodIndex is the postfix in the pod name. The lowest free index is reused.
+	AnnotationPodIndex = "fn.kpt.dev/pod-index"
 	// AnnotationFunctionImage is the repository, without tag or digest, the evaluator pod runs.
 	AnnotationFunctionImage = "fn.kpt.dev/function-image"
 	// AnnotationIdleSince is when the manager first observed the pod with no Claimed request naming it.

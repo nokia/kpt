@@ -53,7 +53,7 @@ func InlinePodTemplate(namespace, wrapperImage string) *corev1.PodTemplate {
 				InitContainers: []corev1.Container{{
 					Name:    fnpod.ContainerInit,
 					Image:   wrapperImage,
-					Command: []string{"cp", "-a", "/home/nonroot/wrapper-server/.", volumeMountPath},
+					Command: []string{"cp", "-r", "/home/nonroot/wrapper-server/.", volumeMountPath},
 					VolumeMounts: []corev1.VolumeMount{{
 						Name:      volumeName,
 						MountPath: volumeMountPath,

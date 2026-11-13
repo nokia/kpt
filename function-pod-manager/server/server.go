@@ -130,12 +130,15 @@ func Start(ctx context.Context, opts Options) error {
 		return fmt.Errorf("create manager: %w", err)
 	}
 	requests := newFunctionPodRequestReconciler(mgr, opts)
+	store := controller.NewFunctionConfigStore()
+	requests.FunctionConfigStore = store
 	if err := requests.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup request controller: %w", err)
 	}
 	configs := &controller.FunctionConfigReconciler{
 		Client: mgr.GetClient(),
 		Pods:   requests,
+		Store:  store,
 		Warmup: opts.Warmup,
 	}
 	if err := configs.SetupWithManager(mgr); err != nil {
@@ -180,11 +183,11 @@ func newFunctionPodRequestReconciler(mgr ctrl.Manager, opts Options) *controller
 		ImagePrefix:      opts.DefaultImagePrefix,
 		Debounce:         opts.ScaleUpDebounce,
 		Retention:        opts.RequestRetention,
-		Limits: controller.Limits{
-			PreferredQueue:  opts.MaxWaitlistLength,
-			MaxParallel:     opts.MaxParallelPods,
-			PodTTL:          opts.PodTTL,
-			PodReadyTimeout: opts.PodReadyTimeout,
+		PodPoolPolicy: controller.PodPoolPolicy{
+			PreferredMaxQueueLength: opts.MaxWaitlistLength,
+			MaxParallelExecutions:   opts.MaxParallelPods,
+			PodTTL:                  opts.PodTTL,
+			PodReadyTimeout:         opts.PodReadyTimeout,
 		},
 	}
 }

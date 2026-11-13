@@ -21,7 +21,6 @@ import (
 	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
-	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -46,9 +45,9 @@ type scaler struct {
 	request  *v1alpha1.FunctionPodRequest
 	requests []v1alpha1.FunctionPodRequest
 	pods     []corev1.Pod
-	configs  []functionconfig.FunctionConfig
+	configs  *FunctionConfigStore
 	prefix   string
-	defaults Limits
+	defaults PodPoolPolicy
 	now      time.Time
 }
 
@@ -79,9 +78,9 @@ func (s scaler) existing(satisfying, healthy []corev1.Pod, repository string) sc
 	if version == "" {
 		return scaleResult{action: scaleNone, repository: repository, pod: matched}
 	}
-	limits := limitsFor(s.configs, repository, version, s.prefix, s.defaults)
+	podPoolPolicy := s.configs.getPodPoolPolicy(repository, version, s.prefix, s.defaults)
 	pending := pendingAgainst(s.requests, satisfying, repository, s.prefix)
-	if pending > limits.PreferredQueue && len(healthy) < limits.MaxParallel {
+	if pending > podPoolPolicy.PreferredMaxQueueLength && len(healthy) < podPoolPolicy.MaxParallelExecutions {
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
 	return scaleResult{action: scaleNone, repository: repository, pod: matched}
