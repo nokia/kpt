@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
+	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

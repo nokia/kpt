@@ -17,7 +17,7 @@ package main
 import (
 	"context"
 
-	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
+	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

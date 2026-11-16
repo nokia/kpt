@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/kptdev/kpt/function-pod-manager/fnpod"
-	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/v1alpha1"
+	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
