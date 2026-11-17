@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	fnreqv1alpha1 "github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 )
 
 // Options configure the wrapper server process.
@@ -48,63 +49,33 @@ type Options struct {
 	ImageKey         string
 	ResolvedVersion  string
 	Entrypoint       []string
+	// DisableMetrics turns off the controller-runtime metrics listener.
+	// The wrapper Prometheus endpoint is unchanged.
+	DisableMetrics bool
+}
+
+// wrapperPod is the pod Run serves, resolved from flags and environment.
+type wrapperPod struct {
+	namespace  string
+	podName    string
+	podIP      string
+	image      string
+	repository string
+	imageKey   string
+	version    string
+	grpcPort   int32
 }
 
 // Run starts the controller-runtime manager, the claim reconciler,
 // and the gRPC FunctionEvaluator server.
 func Run(parent context.Context, op *Options) error {
+	ctrl.SetLogger(klog.Background())
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	ns := strings.TrimSpace(op.Namespace)
-	if ns == "" {
-		ns = strings.TrimSpace(os.Getenv("FUNCTION_POD_REQUEST_NAMESPACE"))
-	}
-	if ns == "" {
-		ns = strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
-	}
-	podName := strings.TrimSpace(op.PodName)
-	if podName == "" {
-		podName = strings.TrimSpace(os.Getenv("POD_NAME"))
-	}
-	fnImage := strings.TrimSpace(op.FunctionImage)
-	if fnImage == "" {
-		fnImage = strings.TrimSpace(os.Getenv("FUNCTION_IMAGE"))
-	}
-	resolved := strings.TrimSpace(op.ResolvedVersion)
-	if resolved == "" {
-		resolved = DefaultResolvedVersion()
-	}
-	podIP := strings.TrimSpace(op.PodIP)
-	if podIP == "" {
-		podIP = DefaultPodIP()
-	}
-	imageKey := strings.TrimSpace(op.ImageKey)
-	if imageKey == "" {
-		imageKey = strings.TrimSpace(os.Getenv(fnpod.EnvImageKey))
-	}
 
-	if ns == "" {
-		return fmt.Errorf("namespace is required (set --namespace or POD_NAMESPACE)")
-	}
-	if podName == "" {
-		return fmt.Errorf("pod name is required (set --pod-name or POD_NAME)")
-	}
-	if fnImage == "" {
-		return fmt.Errorf("function image is required (set --function-image or FUNCTION_IMAGE)")
-	}
-	if len(op.Entrypoint) == 0 {
-		return fmt.Errorf("entrypoint is required after -- on the command line")
-	}
-
-	repository, err := functionRepository(fnImage)
+	pod, err := wrapperPodFrom(op)
 	if err != nil {
-		return fmt.Errorf("function image %q: %w", fnImage, err)
-	}
-	if imageKey == "" {
-		imageKey, err = fnpod.ImageKey(repository)
-		if err != nil {
-			return fmt.Errorf("image key for %q: %w", repository, err)
-		}
+		return err
 	}
 
 	cfg, err := loadRESTConfig(op.Kubeconfig)
@@ -116,13 +87,25 @@ func Run(parent context.Context, op *Options) error {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(fnreqv1alpha1.AddToScheme(scheme))
 
-	labelSelector := labels.SelectorFromSet(labels.Set{fnpod.LabelImageKey: imageKey})
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	// Watch only this namespace and this pod's image-key. Other functions never enter the cache.
+	labelSelector := labels.SelectorFromSet(labels.Set{fnpod.LabelImageKey: pod.imageKey})
+	// The controller name is recorded in a process-global set that is not cleared when the
+	// manager stops. Tests start Run more than once. This process registers one claim controller.
+	skipNameValidation := true
+	managerOpts := ctrl.Options{
 		Scheme:         scheme,
 		LeaderElection: false,
+		Controller:     config.Controller{SkipNameValidation: &skipNameValidation},
+		// FunctionPodRequest reads go to the API server. The informer still wakes the
+		// reconciler, but a cached read can miss a claim this pod just wrote.
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{&fnreqv1alpha1.FunctionPodRequest{}},
+			},
+		},
 		Cache: cache.Options{
 			DefaultNamespaces: map[string]cache.Config{
-				ns: {},
+				pod.namespace: {},
 			},
 			ByObject: map[client.Object]cache.ByObject{
 				&fnreqv1alpha1.FunctionPodRequest{}: {
@@ -130,29 +113,28 @@ func Run(parent context.Context, op *Options) error {
 				},
 			},
 		},
-	})
+	}
+	if op.DisableMetrics {
+		managerOpts.Metrics.BindAddress = "0"
+	}
+	mgr, err := ctrl.NewManager(cfg, managerOpts)
 	if err != nil {
 		return fmt.Errorf("manager: %w", err)
 	}
 
-	grpcPort := op.GRPCPort
-	if grpcPort == 0 {
-		grpcPort = int32(op.Port)
-	}
-
 	claims := &ClaimController{
-		Client:           mgr.GetClient(),
-		Namespace:        ns,
-		PodName:          podName,
-		PodIP:            podIP,
-		GRPCPort:         grpcPort,
-		FunctionImage:    fnImage,
-		FunctionBaseName: fnpod.ImageBaseName(repository),
-		ImageKey:         imageKey,
-		ResolvedVersion:  resolved,
-		ClaimGracePeriod: op.ClaimGracePeriod,
-		requestRepository: repository,
-		capacityWake:     make(chan struct{}, 1),
+		Client:            mgr.GetClient(),
+		Namespace:         pod.namespace,
+		PodName:           pod.podName,
+		PodIP:             pod.podIP,
+		GRPCPort:          pod.grpcPort,
+		FunctionImage:     pod.image,
+		FunctionBaseName:  fnpod.ImageBaseName(pod.repository),
+		ImageKey:          pod.imageKey,
+		ResolvedVersion:   pod.version,
+		ClaimGracePeriod:  op.ClaimGracePeriod,
+		requestRepository: pod.repository,
+		capacityWake:      make(chan struct{}, 1),
 	}
 
 	claimReconciler := &ClaimReconciler{Claims: claims}
@@ -186,7 +168,19 @@ func Run(parent context.Context, op *Options) error {
 		mgrErr <- mgr.Start(ctx)
 	}()
 
-	klog.Infof("wrapper-server listening on %s (namespace=%s pod=%s image=%s image-key=%s)", addr, ns, podName, fnImage, imageKey)
+	klog.InfoS("wrapper-server listening",
+		"addr", addr,
+		"namespace", pod.namespace,
+		"pod", pod.podName,
+		"image", pod.image,
+		"repository", pod.repository,
+		"version", pod.version,
+		"imageKey", pod.imageKey,
+	)
+	if pod.image == fnpod.PlaceholderFunctionImage {
+		klog.ErrorS(fmt.Errorf("FUNCTION_IMAGE is %s", fnpod.PlaceholderFunctionImage),
+			"porch placeholder was not replaced; this pod will skip real FunctionPodRequests")
+	}
 	if metricsAddr != "" {
 		klog.Infof("prometheus metrics listening on %s", metricsAddr)
 	}
@@ -208,6 +202,89 @@ func Run(parent context.Context, op *Options) error {
 		}
 		return err
 	}
+}
+
+func wrapperPodFrom(op *Options) (wrapperPod, error) {
+	ns := strings.TrimSpace(op.Namespace)
+	if ns == "" {
+		ns = strings.TrimSpace(os.Getenv("FUNCTION_POD_REQUEST_NAMESPACE"))
+	}
+	if ns == "" {
+		ns = strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
+	}
+	podName := strings.TrimSpace(op.PodName)
+	if podName == "" {
+		podName = strings.TrimSpace(os.Getenv("POD_NAME"))
+	}
+	resolved := strings.TrimSpace(op.ResolvedVersion)
+	if resolved == "" {
+		resolved = DefaultResolvedVersion()
+	}
+	fnImage := strings.TrimSpace(op.FunctionImage)
+	if fnImage == "" {
+		fnImage = strings.TrimSpace(os.Getenv(fnpod.EnvFunctionImage))
+	}
+	fnImage = resolveFunctionImage(fnImage, strings.TrimSpace(os.Getenv(fnpod.EnvFunctionRepository)), resolved)
+	podIP := strings.TrimSpace(op.PodIP)
+	if podIP == "" {
+		podIP = DefaultPodIP()
+	}
+	imageKey := strings.TrimSpace(op.ImageKey)
+	if imageKey == "" {
+		imageKey = strings.TrimSpace(os.Getenv(fnpod.EnvImageKey))
+	}
+	if ns == "" {
+		return wrapperPod{}, fmt.Errorf("namespace is required (set --namespace or POD_NAMESPACE)")
+	}
+	if podName == "" {
+		return wrapperPod{}, fmt.Errorf("pod name is required (set --pod-name or POD_NAME)")
+	}
+	if fnImage == "" {
+		return wrapperPod{}, fmt.Errorf("function image is required (set --function-image or FUNCTION_IMAGE)")
+	}
+	if len(op.Entrypoint) == 0 {
+		return wrapperPod{}, fmt.Errorf("entrypoint is required after -- on the command line")
+	}
+	repository, err := functionRepository(fnImage)
+	if err != nil {
+		return wrapperPod{}, fmt.Errorf("function image %q: %w", fnImage, err)
+	}
+	if imageKey == "" {
+		imageKey, err = fnpod.ImageKey(repository)
+		if err != nil {
+			return wrapperPod{}, fmt.Errorf("image key for %q: %w", repository, err)
+		}
+	}
+	grpcPort := op.GRPCPort
+	if grpcPort == 0 {
+		grpcPort = int32(op.Port)
+	}
+	return wrapperPod{
+		namespace:  ns,
+		podName:    podName,
+		podIP:      podIP,
+		image:      fnImage,
+		repository: repository,
+		imageKey:   imageKey,
+		version:    resolved,
+		grpcPort:   grpcPort,
+	}, nil
+}
+
+// resolveFunctionImage replaces the porch template placeholder using repository and tag.
+func resolveFunctionImage(fnImage, repository, resolvedVersion string) string {
+	fnImage = strings.TrimSpace(fnImage)
+	if fnImage != "" && fnImage != fnpod.PlaceholderFunctionImage {
+		return fnImage
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return fnImage
+	}
+	if resolvedVersion != "" && resolvedVersion != "unknown" {
+		return repository + ":" + resolvedVersion
+	}
+	return repository
 }
 
 func loadRESTConfig(kubeconfigPath string) (*rest.Config, error) {

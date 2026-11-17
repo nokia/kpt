@@ -23,15 +23,27 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// exit, setupSignals, and runServer are the process edges. Tests replace them
+// so a failed command does not terminate the test binary.
+var (
+	exit         = os.Exit
+	setupSignals = contextsignal.SetupSignalContext
+	runServer    = Run
+)
+
 func main() {
+	if err := execute(os.Args[1:]); err != nil {
+		klog.ErrorS(err, "wrapper-server failed")
+		exit(1)
+	}
+}
+
+func execute(args []string) error {
 	cmd := buildRootCommand()
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	cmd.InitDefaultHelpCmd()
-
-	if err := cmd.Execute(); err != nil {
-		klog.ErrorS(err, "wrapper-server failed")
-		os.Exit(1)
-	}
+	cmd.SetArgs(args)
+	return cmd.Execute()
 }
 
 func buildRootCommand() *cobra.Command {
@@ -62,8 +74,6 @@ func buildRootCommand() *cobra.Command {
 }
 
 func runWrapperServer(cmd *cobra.Command, args []string) error {
-	ctx := contextsignal.SetupSignalContext()
-
 	port, err := cmd.Flags().GetInt("port")
 	if err != nil {
 		return err
@@ -113,5 +123,5 @@ func runWrapperServer(cmd *cobra.Command, args []string) error {
 		ResolvedVersion:  resolvedVersion,
 		Entrypoint:       args,
 	}
-	return Run(ctx, op)
+	return runServer(setupSignals(), op)
 }

@@ -113,6 +113,26 @@ func TestSetEnvReplacesAnExistingValue(t *testing.T) {
 	assert.Equal(t, []corev1.EnvVar{{Name: "PORT", Value: "2"}}, env)
 }
 
+func TestApplyEvaluatorEnvReplacesThePorchPlaceholder(t *testing.T) {
+	pod := functionPod()
+	pod.Spec.Containers[0].Env = []corev1.EnvVar{{
+		Name:  fnpod.EnvFunctionImage,
+		Value: fnpod.PlaceholderFunctionImage,
+	}}
+
+	ApplyEvaluatorEnv(pod, "example.com/fn:v0.1.5", "example.com/fn", "v0.1.5", "fn-abcdef12", "example.com")
+
+	env := map[string]string{}
+	for _, item := range pod.Spec.Containers[0].Env {
+		env[item.Name] = item.Value
+	}
+	assert.Equal(t, "example.com/fn:v0.1.5", env[fnpod.EnvFunctionImage])
+	assert.Equal(t, "example.com/fn", env[fnpod.EnvFunctionRepository])
+	assert.Equal(t, "v0.1.5", env[fnpod.EnvVersion])
+	assert.Equal(t, "fn-abcdef12", env[fnpod.EnvImageKey])
+	assert.Equal(t, "example.com", env[fnpod.EnvDefaultImagePrefix])
+}
+
 func functionPod() *corev1.PodTemplateSpec {
 	return &corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		Containers: []corev1.Container{{Name: fnpod.ContainerFunction}},

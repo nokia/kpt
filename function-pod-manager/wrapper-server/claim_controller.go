@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -68,8 +69,14 @@ type activeClaimState struct {
 
 const claimFieldOwner = "function-evaluator-pod"
 
+// errAlreadyHeld means this pod already owns the request, so this cycle must not claim another one.
+var errAlreadyHeld = errors.New("already claimed by this pod")
+
 // AdoptClaimsOnStartup recovers in-memory state from Claimed requests still owned by this pod.
 func (c *ClaimController) AdoptClaimsOnStartup(ctx context.Context) error {
+	if c.Client == nil {
+		return fmt.Errorf("client is required")
+	}
 	list := &fnreqv1alpha1.FunctionPodRequestList{}
 	if err := c.Client.List(ctx, list,
 		client.InNamespace(c.Namespace),
@@ -150,6 +157,7 @@ func (c *ClaimController) runClaimCycle(ctx context.Context) (ctrl.Result, error
 				requeue = 0
 			}
 		}
+		klog.InfoS("claim cycle busy", "request", c.activeClaim.name, "pod", c.PodName, "requeue", requeue.String())
 		return ctrl.Result{RequeueAfter: requeue}, nil
 	}
 
@@ -172,16 +180,24 @@ func (c *ClaimController) runClaimCycle(ctx context.Context) (ctrl.Result, error
 
 	for i := range claimable {
 		switch err := c.tryClaim(ctx, &claimable[i]); {
-		case err == nil:
+		case err == nil || errors.Is(err, errAlreadyHeld):
 			klog.InfoS("claimed FunctionPodRequest", "request", claimable[i].Name, "pod", c.PodName)
 			c.activeClaim = &activeClaimState{name: claimable[i].Name, claimedAt: now}
 			return ctrl.Result{}, nil
 		case apierrors.IsConflict(err):
 			// Lost race: normal, not an error (Decision 2 / study).
-			klog.V(4).InfoS("claim conflict", "request", claimable[i].Name)
+			klog.InfoS("claim conflict", "request", claimable[i].Name, "namespace", claimable[i].Namespace, "pod", c.PodName)
 			continue
 		default:
-			klog.V(4).InfoS("skip claim", "request", claimable[i].Name, "err", err)
+			klog.InfoS("drop FunctionPodRequest",
+				"request", claimable[i].Name,
+				"namespace", claimable[i].Namespace,
+				"image", claimable[i].Spec.Image,
+				"versionConstraint", claimable[i].Spec.VersionConstraint,
+				"phase", claimable[i].Status.Phase,
+				"pod", c.PodName,
+				"err", err,
+			)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -198,26 +214,73 @@ func (c *ClaimController) listClaimable(ctx context.Context) ([]fnreqv1alpha1.Fu
 	now := time.Now().UTC()
 	out := make([]fnreqv1alpha1.FunctionPodRequest, 0, len(list.Items))
 	for i := range list.Items {
-		req := list.Items[i]
-		if req.Status.Phase != fnreqv1alpha1.FunctionPodRequestPhaseCreated {
+		req := &list.Items[i]
+		if reason := c.skipReason(req, now); reason != "" {
+			klog.InfoS("skip FunctionPodRequest",
+				"request", req.Name,
+				"namespace", req.Namespace,
+				"reason", reason,
+				"phase", req.Status.Phase,
+				"image", req.Spec.Image,
+				"versionConstraint", req.Spec.VersionConstraint,
+				"requestImageKey", requestImageKey(req),
+				"deadline", deadlineText(req),
+				"pod", c.PodName,
+				"podImage", c.FunctionImage,
+				"podImageKey", c.ImageKey,
+				"podVersion", c.ResolvedVersion,
+			)
 			continue
 		}
-		if req.Spec.Deadline != nil && req.Spec.Deadline.Before(&metav1.Time{Time: now}) {
-			continue
-		}
-		if !c.requestMatchesPod(&req) {
-			continue
-		}
-		out = append(out, req)
+		out = append(out, *req)
 	}
+	klog.InfoS("FunctionPodRequest claim scan",
+		"listed", len(list.Items),
+		"claimable", len(out),
+		"namespace", c.Namespace,
+		"pod", c.PodName,
+		"podImage", c.FunctionImage,
+		"podImageKey", c.ImageKey,
+		"podVersion", c.ResolvedVersion,
+	)
 	return out, nil
 }
 
-func (c *ClaimController) requestMatchesPod(req *fnreqv1alpha1.FunctionPodRequest) bool {
-	if fnpod.ImageBaseName(req.Spec.Image) != c.FunctionBaseName {
-		return false
+func (c *ClaimController) skipReason(req *fnreqv1alpha1.FunctionPodRequest, now time.Time) string {
+	if !phaseIsCreated(req.Status.Phase) {
+		return fmt.Sprintf("phase %q is not Created", req.Status.Phase)
 	}
-	return fnpod.VersionSatisfies(c.ResolvedVersion, req.Spec.VersionConstraint)
+	if req.Spec.Deadline != nil && req.Spec.Deadline.Before(&metav1.Time{Time: now}) {
+		return "deadline passed"
+	}
+	if key := requestImageKey(req); key != "" && c.ImageKey != "" && key != c.ImageKey {
+		return fmt.Sprintf("image-key %q != pod %q", key, c.ImageKey)
+	}
+	if base := fnpod.ImageBaseName(req.Spec.Image); base != c.FunctionBaseName {
+		return fmt.Sprintf("image base %q != pod %q", base, c.FunctionBaseName)
+	}
+	if !fnpod.VersionSatisfies(c.ResolvedVersion, req.Spec.VersionConstraint) {
+		return fmt.Sprintf("pod version %q does not satisfy %q", c.ResolvedVersion, req.Spec.VersionConstraint)
+	}
+	return ""
+}
+
+func requestImageKey(req *fnreqv1alpha1.FunctionPodRequest) string {
+	if req.Labels == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.Labels[fnpod.LabelImageKey])
+}
+
+func deadlineText(req *fnreqv1alpha1.FunctionPodRequest) string {
+	if req.Spec.Deadline == nil {
+		return ""
+	}
+	return req.Spec.Deadline.UTC().Format(time.RFC3339)
+}
+
+func phaseIsCreated(phase fnreqv1alpha1.FunctionPodRequestPhase) bool {
+	return phase == "" || phase == fnreqv1alpha1.FunctionPodRequestPhaseCreated
 }
 
 func (c *ClaimController) tryClaim(ctx context.Context, req *fnreqv1alpha1.FunctionPodRequest) error {
@@ -227,15 +290,12 @@ func (c *ClaimController) tryClaim(ctx context.Context, req *fnreqv1alpha1.Funct
 		if err := c.Client.Get(ctx, key, fresh); err != nil {
 			return err
 		}
-		if fresh.Status.Phase != fnreqv1alpha1.FunctionPodRequestPhaseCreated {
-			return fmt.Errorf("phase is %s", fresh.Status.Phase)
-		}
-		if !c.requestMatchesPod(fresh) {
-			return fmt.Errorf("request does not match this pod")
+		if fresh.Status.Phase == fnreqv1alpha1.FunctionPodRequestPhaseClaimed && fresh.Status.EvaluatorPodName == c.PodName {
+			return errAlreadyHeld
 		}
 		now := time.Now().UTC()
-		if fresh.Spec.Deadline != nil && fresh.Spec.Deadline.Before(&metav1.Time{Time: now}) {
-			return fmt.Errorf("past deadline")
+		if reason := c.skipReason(fresh, now); reason != "" {
+			return fmt.Errorf("%s", reason)
 		}
 		base := fresh.DeepCopy()
 		fresh.Status.Phase = fnreqv1alpha1.FunctionPodRequestPhaseClaimed
@@ -347,4 +407,22 @@ func functionRepository(imageRef string) (string, error) {
 		return "", err
 	}
 	return n.Context().Name(), nil
+}
+
+// ClaimReconciler wires claim selection to controller-runtime watch events (label-scoped cache).
+type ClaimReconciler struct {
+	Claims *ClaimController
+}
+
+// Reconcile runs the oldest-first claim cycle when a matching FunctionPodRequest changes.
+func (r *ClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	klog.InfoS("FunctionPodRequest event", "request", req.Name, "namespace", req.Namespace, "pod", r.Claims.PodName)
+	return r.Claims.runClaimCycle(ctx)
+}
+
+// SetupWithManager registers a reconciler on FunctionPodRequest (namespace and image-key filtered via cache).
+func (r *ClaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&fnreqv1alpha1.FunctionPodRequest{}).
+		Complete(r)
 }

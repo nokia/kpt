@@ -65,6 +65,26 @@ func TestCreateEvaluatorUsesInlineTemplate(t *testing.T) {
 	require.NoError(t, kube.Get(ctx, client.ObjectKey{Namespace: "fn-test", Name: "merge-netconf"}, service))
 	assert.Equal(t, "merge-netconf", created.Labels[fnpod.LabelImage])
 	assert.Equal(t, map[string]string{fnpod.LabelImage: "merge-netconf"}, service.Spec.Selector)
+	assert.Equal(t, "ghcr.io/example/merge-netconf:v1.2.3", envValue(function.Env, fnpod.EnvFunctionImage))
+	assert.Equal(t, "v1.2.3", envValue(function.Env, fnpod.EnvVersion))
+}
+
+func TestCreateEvaluatorKeepsFunctionImageAfterPorchEnvOverride(t *testing.T) {
+	config := &functionconfig.PodExecutorConfig{TemplateOverrides: &functionconfig.TemplateOverrides{
+		Container: &functionconfig.ContainerOverrides{Env: []corev1.EnvVar{{
+			Name:  fnpod.EnvFunctionImage,
+			Value: fnpod.PlaceholderFunctionImage,
+		}}},
+	}}
+	created, err := newTestProvisioner(newFakeClient(t), false).CreateEvaluator(
+		context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", config, 0,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "ghcr.io/example/merge-netconf:v1.2.3", envValue(created.Spec.Containers[0].Env, fnpod.EnvFunctionImage))
+	assert.NotEqual(t, fnpod.PlaceholderFunctionImage, envValue(created.Spec.Containers[0].Env, fnpod.EnvFunctionImage))
+	key, err := fnpod.ImageKey("ghcr.io/example/merge-netconf")
+	require.NoError(t, err)
+	assert.Equal(t, key, envValue(created.Spec.Containers[0].Env, fnpod.EnvImageKey))
 }
 
 func TestCreateEvaluatorAddsImagePullSecret(t *testing.T) {
@@ -216,6 +236,15 @@ func newTestProvisioner(kube client.Client, private bool) *Provisioner {
 			Entrypoint: []string{"/fn"},
 		},
 	})
+}
+
+func envValue(env []corev1.EnvVar, name string) string {
+	for _, item := range env {
+		if item.Name == name {
+			return item.Value
+		}
+	}
+	return ""
 }
 
 func newFakeClient(t *testing.T) client.Client {

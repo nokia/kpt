@@ -37,6 +37,16 @@ const (
 	DefaultNamespace = "porch-fn-system"
 	// WrapperServerImageEnv is the environment variable porch uses for the wrapper-server image.
 	WrapperServerImageEnv = "WRAPPER_SERVER_IMAGE"
+	// EnvFunctionImage is the concrete function image the evaluator pod runs.
+	EnvFunctionImage = "FUNCTION_IMAGE"
+	// EnvFunctionRepository is the repository without tag, used when FUNCTION_IMAGE is still a placeholder.
+	EnvFunctionRepository = "FUNCTION_REPOSITORY"
+	// EnvDefaultImagePrefix is prepended to a bare function name.
+	EnvDefaultImagePrefix = "DEFAULT_IMAGE_PREFIX"
+	// EnvVersion is the concrete tag this evaluator pod was started with.
+	EnvVersion = "VERSION"
+	// PlaceholderFunctionImage is the porch PodTemplate stand-in replaced at pod creation.
+	PlaceholderFunctionImage = "image-replaced-by-kpt-func-image"
 
 	// ContainerFunction is the KRM function container name in the base pod template.
 	ContainerFunction = "function"

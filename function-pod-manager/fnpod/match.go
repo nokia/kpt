@@ -44,7 +44,7 @@ func ImageBaseName(imageRef string) string {
 
 // VersionSatisfies reports whether concreteVersion satisfies the request constraint (empty matches all).
 func VersionSatisfies(concreteVersion, constraint string) bool {
-	if constraint == "" {
+	if constraint == "" || concreteVersion == constraint {
 		return true
 	}
 	c, err := semver.NewConstraint(constraint)

@@ -101,12 +101,18 @@ func (p *Provisioner) CreateEvaluator(
 	}
 	spec.Spec.InitContainers[0].Image = p.cfg.WrapperServerImage
 	p.appendImagePullSecret(image, &spec)
-	if err := util.PatchFunctionContainer(&spec, meta.Entrypoint, image); err != nil {
-		return nil, err
-	}
 	if config != nil {
 		util.MergeTemplateOverrides(&spec, config.TemplateOverrides)
 	}
+	if err := util.PatchFunctionContainer(&spec, meta.Entrypoint, image); err != nil {
+		return nil, err
+	}
+	imageKey, err := fnpod.ImageKey(repository)
+	if err != nil {
+		return nil, err
+	}
+	// After overrides: porch replaces env and restores FUNCTION_IMAGE=image-replaced-by-kpt-func-image.
+	util.ApplyEvaluatorEnv(&spec, image, repository, version, imageKey, p.cfg.DefaultImagePrefix)
 	patchPodIdentity(&spec, p.cfg.Namespace, serviceName, template.ResourceVersion, repository, version, postfix)
 	spec.GenerateName = podID + "-"
 	pod := &corev1.Pod{

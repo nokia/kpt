@@ -105,6 +105,9 @@ func (r *FunctionPodRequestReconciler) reconcile(
 	if done, err := r.reapOne(ctx, request, pods, now); done || err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.prepareForClaim(ctx, request); err != nil {
+		return ctrl.Result{}, err
+	}
 	phase := phaseOf(request)
 	if phase != v1alpha1.FunctionPodRequestPhaseCreated {
 		return ctrl.Result{RequeueAfter: r.untilDeadline(request, now)}, nil
@@ -167,9 +170,11 @@ func (r *FunctionPodRequestReconciler) startPod(
 	return ctrl.Result{RequeueAfter: r.PodPoolPolicy.PodReadyTimeout}, nil
 }
 
+const latestTag = "latest"
+
 func (r *FunctionPodRequestReconciler) resolve(ctx context.Context, repository, constraint string) (string, error) {
 	if constraint == "" {
-		return "latest", nil
+		return latestTag, nil
 	}
 	tags, err := r.Provisioner.ListTags(ctx, repository)
 	if err != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 )
 
 type scaleAction int
@@ -65,7 +66,7 @@ func (s scaler) scale() scaleResult {
 	if s.request.Spec.VersionConstraint == "" {
 		version := image.Parse(image.WithPrefix(s.request.Spec.Image, s.prefix)).Tag
 		if version == "" {
-			version = "latest"
+			version = latestTag
 		}
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
@@ -73,14 +74,30 @@ func (s scaler) scale() scaleResult {
 }
 
 func (s scaler) existing(satisfying, healthy []corev1.Pod, repository string) scaleResult {
+	// Prefer the highest semver. A tag such as "latest" is still a concrete version the
+	// next pod must repeat; dropping it skips scale-up and leaves a single evaluator.
 	version := util.HighestVersion(versionsOf(satisfying))
+	if version == "" {
+		version = firstVersion(satisfying)
+	}
 	matched := &satisfying[0]
 	if version == "" {
 		return scaleResult{action: scaleNone, repository: repository, pod: matched}
 	}
 	podPoolPolicy := s.configs.getPodPoolPolicy(repository, version, s.prefix, s.defaults)
 	pending := pendingAgainst(s.requests, satisfying, repository, s.prefix)
-	if pending > podPoolPolicy.PreferredMaxQueueLength && len(healthy) < podPoolPolicy.MaxParallelExecutions {
+	create := pending > podPoolPolicy.PreferredMaxQueueLength && len(healthy) < podPoolPolicy.MaxParallelExecutions
+	klog.InfoS("evaluator scale",
+		"request", s.request.Name,
+		"repository", repository,
+		"version", version,
+		"pending", pending,
+		"preferredQueue", podPoolPolicy.PreferredMaxQueueLength,
+		"healthy", len(healthy),
+		"maxParallel", podPoolPolicy.MaxParallelExecutions,
+		"create", create,
+	)
+	if create {
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
 	return scaleResult{action: scaleNone, repository: repository, pod: matched}
@@ -135,6 +152,15 @@ func podsSatisfying(pods []corev1.Pod, constraint string) []corev1.Pod {
 		}
 	}
 	return out
+}
+
+func firstVersion(pods []corev1.Pod) string {
+	for i := range pods {
+		if version := pods[i].Annotations[fnpod.AnnotationResolvedVersion]; version != "" {
+			return version
+		}
+	}
+	return ""
 }
 
 func versionsOf(pods []corev1.Pod) []string {

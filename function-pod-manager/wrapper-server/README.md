@@ -11,4 +11,3 @@ Binary and libraries: streaming `FunctionEvaluator` gRPC service,
 | `healthchecker/` | gRPC health service (ported from Porch `func/healthchecker`). |
 | `*.go` (root) | Claim controller, gRPC wiring, `controller-runtime` startup, CLI (`package main`). |
 
-After moving shared types, run `go mod tidy` in this directory.
