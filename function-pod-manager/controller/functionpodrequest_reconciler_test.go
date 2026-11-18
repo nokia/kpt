@@ -119,7 +119,7 @@ func TestQueueScalesLatestTagToTheParallelCap(t *testing.T) {
 		objs = append(objs, newRequest(name, "", v1alpha1.FunctionPodRequestPhaseCreated))
 	}
 	pod := readyPod("eval-a")
-	pod.Annotations[fnpod.AnnotationResolvedVersion] = latestTag
+	pod.Annotations[fnpod.AnnotationResolvedVersion] = fnpod.LatestTag
 	objs = append(objs, pod, functionConfig(1, pending, []string{"*"}))
 	reconciler, kube, _ := newHarness(t, objs...)
 	// Flag defaults stay below the FunctionConfig cap. The config must win.
@@ -134,7 +134,7 @@ func TestQueueScalesLatestTagToTheParallelCap(t *testing.T) {
 	got := versions(t, kube)
 	assert.Len(t, got, pending)
 	for _, version := range got {
-		assert.Equal(t, latestTag, version)
+		assert.Equal(t, fnpod.LatestTag, version)
 	}
 }
 
@@ -335,7 +335,7 @@ func newHarness(t *testing.T, objs ...client.Object) (*FunctionPodRequestReconci
 		DefaultImagePrefix: runneroptions.GHCRImagePrefix,
 		ImageRegistry: &provisioner.FakeImageRegistry{
 			Tags: map[string][]string{
-				testKrmFunction: {"v1.0.7", "v1.1.2", latestTag},
+				testKrmFunction: {"v1.0.7", "v1.1.2", fnpod.LatestTag},
 			},
 			Digest:     "0123456789abcdef",
 			Entrypoint: []string{"/fn"},
@@ -400,7 +400,7 @@ func readyPod(name string) *corev1.Pod {
 func functionConfig(queue, parallel int, tags []string) *functionconfig.FunctionConfig {
 	return &functionconfig.FunctionConfig{
 		TypeMeta:   metav1.TypeMeta{APIVersion: functionconfig.GroupVersion.String(), Kind: "FunctionConfig"},
-		ObjectMeta: metav1.ObjectMeta{Name: "merge-netconf", Namespace: testNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "other-fn", Namespace: testNamespace},
 		Spec: functionconfig.FunctionConfigSpec{
 			Image: testKrmFunction,
 			PodExecutor: &functionconfig.PodExecutorConfig{

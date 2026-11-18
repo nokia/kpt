@@ -15,7 +15,7 @@
 // Upstream (Porch): porch/func/evaluator/stream.go
 // kpt extension: request_name in SendRequest/RecvRequest and related comments.
 
-package evaluator
+package proto
 
 import (
 	"bytes"

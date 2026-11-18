@@ -66,7 +66,7 @@ func (s scaler) scale() scaleResult {
 	if s.request.Spec.VersionConstraint == "" {
 		version := image.Parse(image.WithPrefix(s.request.Spec.Image, s.prefix)).Tag
 		if version == "" {
-			version = latestTag
+			version = fnpod.LatestTag
 		}
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}

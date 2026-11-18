@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package evaluator;
 
-option go_package = "github.com/kptdev/kpt/function-pod-manager/wrapper-server/evaluator";
+option go_package = "github.com/kptdev/kpt/wrapper-server/proto";
 
 // Evaluator of kpt functions
 service FunctionEvaluator {

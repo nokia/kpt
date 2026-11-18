@@ -18,7 +18,7 @@
 // 	protoc        v5.29.4
 // source: evaluator.proto
 
-package evaluator
+package proto
 
 import (
 	reflect "reflect"
@@ -201,7 +201,7 @@ const file_evaluator_proto_rawDesc = "" +
 	"\rresource_list\x18\x01 \x01(\fR\fresourceList\x12\x10\n" +
 	"\x03log\x18\x02 \x01(\fR\x03log2v\n" +
 	"\x11FunctionEvaluator\x12a\n" +
-	"\x10EvaluateFunction\x12\".evaluator.EvaluateFunctionRequest\x1a#.evaluator.EvaluateFunctionResponse\"\x00(\x010\x01BEZCgithub.com/kptdev/kpt/function-pod-manager/wrapper-server/evaluatorb\x06proto3"
+	"\x10EvaluateFunction\x12\".evaluator.EvaluateFunctionRequest\x1a#.evaluator.EvaluateFunctionResponse\"\x00(\x010\x01B,Z*github.com/kptdev/kpt/wrapper-server/protob\x06proto3"
 
 var (
 	file_evaluator_proto_rawDescOnce sync.Once

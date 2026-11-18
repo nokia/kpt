@@ -20,7 +20,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
@@ -32,8 +32,8 @@ func TestCheckReportsTheServerIsServing(t *testing.T) {
 
 	resp, err := checker.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "evaluator"})
 
-	require.NoError(t, err)
-	require.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.GetStatus())
+	assert.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.GetStatus())
 }
 
 func TestWatchSendsAServingStatus(t *testing.T) {
@@ -42,8 +42,8 @@ func TestWatchSendsAServingStatus(t *testing.T) {
 
 	err := checker.Watch(&grpc_health_v1.HealthCheckRequest{Service: "evaluator"}, stream)
 
-	require.NoError(t, err)
-	require.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, stream.sent.GetStatus())
+	assert.NoError(t, err)
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, stream.sent.GetStatus())
 }
 
 func TestWatchReturnsTheStreamSendError(t *testing.T) {
@@ -52,7 +52,7 @@ func TestWatchReturnsTheStreamSendError(t *testing.T) {
 
 	err := checker.Watch(&grpc_health_v1.HealthCheckRequest{}, stream)
 
-	require.EqualError(t, err, "client closed")
+	assert.EqualError(t, err, "client closed")
 }
 
 func TestListIsNotImplemented(t *testing.T) {
@@ -60,9 +60,9 @@ func TestListIsNotImplemented(t *testing.T) {
 
 	resp, err := checker.List(context.Background(), &grpc_health_v1.HealthListRequest{})
 
-	require.Nil(t, resp)
-	require.Equal(t, codes.Unimplemented, status.Code(err))
-	require.ErrorContains(t, err, "List is not implemented")
+	assert.Nil(t, resp)
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
+	assert.ErrorContains(t, err, "List is not implemented")
 }
 
 type watchStream struct {

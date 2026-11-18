@@ -22,11 +22,11 @@ import (
 )
 
 func TestImageKeyStableForRepository(t *testing.T) {
-	got, err := ImageKey("ghcr.io/kpt-fn/merge-netconf")
+	got, err := ImageKey("ghcr.io/kpt-fn/some-fn")
 	require.NoError(t, err)
 	assert.True(t, len(got) <= 63)
-	assert.Contains(t, got, "merge-netconf-")
-	got2, err := ImageKey("ghcr.io/kpt-fn/merge-netconf")
+	assert.Contains(t, got, "some-fn-")
+	got2, err := ImageKey("ghcr.io/kpt-fn/some-fn")
 	require.NoError(t, err)
 	assert.Equal(t, got, got2)
 }

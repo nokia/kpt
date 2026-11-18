@@ -19,22 +19,17 @@ import (
 	"fmt"
 	"net"
 
-	pb "github.com/kptdev/kpt/function-pod-manager/wrapper-server/evaluator"
-	"github.com/kptdev/kpt/function-pod-manager/wrapper-server/healthchecker"
+	"github.com/kptdev/kpt/wrapper-server/healthchecker"
+	pb "github.com/kptdev/kpt/wrapper-server/proto"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// ServeGRPC listens on addr and serves FunctionEvaluator and gRPC health.
+// ServeGRPC serves FunctionEvaluator and gRPC health on lis.
 // meter records rpc.server.* metrics; nil disables that instrumentation.
-func ServeGRPC(ctx context.Context, addr string, claims *ClaimController, unary *SingleFunctionEvaluator, meter metric.MeterProvider) error {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("listen %s: %w", addr, err)
-	}
-
+func ServeGRPC(ctx context.Context, lis net.Listener, claims *ClaimController, unary *SingleFunctionEvaluator, meter metric.MeterProvider) error {
 	srv := grpc.NewServer(grpcServerOptions(meter)...)
 	pb.RegisterFunctionEvaluatorServer(srv, newClaimAwareServer(claims, unary))
 	healthpb.RegisterHealthServer(srv, healthchecker.NewHealthChecker())

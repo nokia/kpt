@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/kptdev/kpt/function-pod-manager/wrapper-server/healthchecker"
+	"github.com/kptdev/kpt/wrapper-server/healthchecker"
 )
 
 func TestPrometheusDisabledWithoutExporter(t *testing.T) {

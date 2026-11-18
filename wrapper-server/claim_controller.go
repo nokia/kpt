@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -169,13 +169,11 @@ func (c *ClaimController) runClaimCycle(ctx context.Context) (ctrl.Result, error
 		return ctrl.Result{}, nil
 	}
 
-	sort.Slice(claimable, func(i, j int) bool {
-		ti := claimable[i].CreationTimestamp.Time
-		tj := claimable[j].CreationTimestamp.Time
-		if !ti.Equal(tj) {
-			return ti.Before(tj)
+	slices.SortFunc(claimable, func(a, b fnreqv1alpha1.FunctionPodRequest) int {
+		if c := a.CreationTimestamp.Compare(b.CreationTimestamp.Time); c != 0 {
+			return c
 		}
-		return claimable[i].Name < claimable[j].Name
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	for i := range claimable {

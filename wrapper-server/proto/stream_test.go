@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package evaluator
+package proto
 
 import (
 	"bytes"
@@ -21,6 +21,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -40,16 +41,16 @@ func TestSendRequestPutsMetadataOnlyOnTheFirstChunk(t *testing.T) {
 
 	err := SendRequest(sent, req)
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.Len(t, sent.msgs, 2)
-	require.Equal(t, streamTestImage, sent.msgs[0].GetImage())
-	require.Equal(t, streamTestTag, sent.msgs[0].GetTag())
-	require.Equal(t, streamTestExec, sent.msgs[0].GetExecPath())
-	require.Equal(t, streamTestRequest, sent.msgs[0].GetRequestName())
-	require.Empty(t, sent.msgs[1].GetImage())
-	require.Empty(t, sent.msgs[1].GetRequestName())
-	require.Equal(t, payload[:maxChunkSize], sent.msgs[0].GetResourceList())
-	require.Equal(t, payload[maxChunkSize:], sent.msgs[1].GetResourceList())
+	assert.Equal(t, streamTestImage, sent.msgs[0].GetImage())
+	assert.Equal(t, streamTestTag, sent.msgs[0].GetTag())
+	assert.Equal(t, streamTestExec, sent.msgs[0].GetExecPath())
+	assert.Equal(t, streamTestRequest, sent.msgs[0].GetRequestName())
+	assert.Empty(t, sent.msgs[1].GetImage())
+	assert.Empty(t, sent.msgs[1].GetRequestName())
+	assert.Equal(t, payload[:maxChunkSize], sent.msgs[0].GetResourceList())
+	assert.Equal(t, payload[maxChunkSize:], sent.msgs[1].GetResourceList())
 }
 
 func TestSendRequestSendsOneMessageForAnEmptyResourceList(t *testing.T) {
@@ -57,34 +58,35 @@ func TestSendRequestSendsOneMessageForAnEmptyResourceList(t *testing.T) {
 
 	err := SendRequest(sent, testRequest(nil))
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.Len(t, sent.msgs, 1)
-	require.Empty(t, sent.msgs[0].GetResourceList())
-	require.Equal(t, streamTestRequest, sent.msgs[0].GetRequestName())
+	assert.Empty(t, sent.msgs[0].GetResourceList())
+	assert.Equal(t, streamTestRequest, sent.msgs[0].GetRequestName())
 }
 
 func TestRecvRequestReassemblesChunksAndKeepsTheFirstMetadata(t *testing.T) {
 	payload := bytes.Repeat([]byte("b"), maxChunkSize+3)
 	sent := &requestCapture{}
 	require.NoError(t, SendRequest(sent, testRequest(payload)))
+	require.Len(t, sent.msgs, 2)
 	sent.msgs[1].Image = "ignored"
 
 	got, err := RecvRequest(&requestSource{msgs: sent.msgs})
 
-	require.NoError(t, err)
-	require.Equal(t, payload, got.GetResourceList())
-	require.Equal(t, streamTestImage, got.GetImage())
-	require.Equal(t, streamTestTag, got.GetTag())
-	require.Equal(t, streamTestExec, got.GetExecPath())
-	require.Equal(t, streamTestRequest, got.GetRequestName())
+	assert.NoError(t, err)
+	assert.Equal(t, payload, got.GetResourceList())
+	assert.Equal(t, streamTestImage, got.GetImage())
+	assert.Equal(t, streamTestTag, got.GetTag())
+	assert.Equal(t, streamTestExec, got.GetExecPath())
+	assert.Equal(t, streamTestRequest, got.GetRequestName())
 }
 
 func TestRecvRequestReturnsAnEmptyRequestWhenTheStreamIsClosed(t *testing.T) {
 	got, err := RecvRequest(&requestSource{})
 
-	require.NoError(t, err)
-	require.Empty(t, got.GetResourceList())
-	require.Empty(t, got.GetRequestName())
+	assert.NoError(t, err)
+	assert.Empty(t, got.GetResourceList())
+	assert.Empty(t, got.GetRequestName())
 }
 
 func TestSendRequestReturnsTheStreamError(t *testing.T) {
@@ -92,15 +94,15 @@ func TestSendRequestReturnsTheStreamError(t *testing.T) {
 
 	err := SendRequest(sent, testRequest(bytes.Repeat([]byte("a"), maxChunkSize+1)))
 
-	require.EqualError(t, err, "send closed")
-	require.Len(t, sent.msgs, 1)
+	assert.EqualError(t, err, "send closed")
+	assert.Len(t, sent.msgs, 1)
 }
 
 func TestRecvRequestReturnsTheStreamError(t *testing.T) {
 	got, err := RecvRequest(&requestSource{err: errors.New("recv closed")})
 
-	require.Nil(t, got)
-	require.EqualError(t, err, "recv closed")
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "recv closed")
 }
 
 func TestSendResponseSplitsTheResourceListAndTheLog(t *testing.T) {
@@ -110,13 +112,13 @@ func TestSendResponseSplitsTheResourceListAndTheLog(t *testing.T) {
 
 	err := SendResponse(sent, &EvaluateFunctionResponse{ResourceList: body, Log: log})
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.Len(t, sent.msgs, 4)
-	require.Equal(t, body[:maxChunkSize], sent.msgs[0].GetResourceList())
-	require.Equal(t, body[maxChunkSize:], sent.msgs[1].GetResourceList())
-	require.Empty(t, sent.msgs[2].GetResourceList())
-	require.Equal(t, log[:maxChunkSize], sent.msgs[2].GetLog())
-	require.Equal(t, log[maxChunkSize:], sent.msgs[3].GetLog())
+	assert.Equal(t, body[:maxChunkSize], sent.msgs[0].GetResourceList())
+	assert.Equal(t, body[maxChunkSize:], sent.msgs[1].GetResourceList())
+	assert.Empty(t, sent.msgs[2].GetResourceList())
+	assert.Equal(t, log[:maxChunkSize], sent.msgs[2].GetLog())
+	assert.Equal(t, log[maxChunkSize:], sent.msgs[3].GetLog())
 }
 
 func TestSendResponseSendsOneMessageWhenTheResponseIsEmpty(t *testing.T) {
@@ -124,10 +126,10 @@ func TestSendResponseSendsOneMessageWhenTheResponseIsEmpty(t *testing.T) {
 
 	err := SendResponse(sent, nil)
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.Len(t, sent.msgs, 1)
-	require.Empty(t, sent.msgs[0].GetResourceList())
-	require.Empty(t, sent.msgs[0].GetLog())
+	assert.Empty(t, sent.msgs[0].GetResourceList())
+	assert.Empty(t, sent.msgs[0].GetLog())
 }
 
 func TestSendResponseReturnsTheStreamError(t *testing.T) {
@@ -135,37 +137,37 @@ func TestSendResponseReturnsTheStreamError(t *testing.T) {
 
 	err := SendResponse(sent, &EvaluateFunctionResponse{ResourceList: []byte("body"), Log: []byte("log")})
 
-	require.EqualError(t, err, "response closed")
+	assert.EqualError(t, err, "response closed")
 	require.Len(t, sent.msgs, 1)
-	require.Equal(t, []byte("body"), sent.msgs[0].GetResourceList())
+	assert.Equal(t, []byte("body"), sent.msgs[0].GetResourceList())
 }
 
 func TestRecvResponseConcatenatesTheResourceListAndTheLog(t *testing.T) {
 	body := bytes.Repeat([]byte("r"), maxChunkSize+1)
 	log := bytes.Repeat([]byte("l"), maxChunkSize+1)
 	sent := &responseCapture{}
-	require.NoError(t, SendResponse(sent, &EvaluateFunctionResponse{ResourceList: body, Log: log}))
+	assert.NoError(t, SendResponse(sent, &EvaluateFunctionResponse{ResourceList: body, Log: log}))
 
 	got, err := RecvResponse(&responseSource{msgs: sent.msgs})
 
-	require.NoError(t, err)
-	require.Equal(t, body, got.GetResourceList())
-	require.Equal(t, log, got.GetLog())
+	assert.NoError(t, err)
+	assert.Equal(t, body, got.GetResourceList())
+	assert.Equal(t, log, got.GetLog())
 }
 
 func TestRecvResponseReturnsAnEmptyResponseWhenTheStreamIsClosed(t *testing.T) {
 	got, err := RecvResponse(&responseSource{})
 
-	require.NoError(t, err)
-	require.Empty(t, got.GetResourceList())
-	require.Empty(t, got.GetLog())
+	assert.NoError(t, err)
+	assert.Empty(t, got.GetResourceList())
+	assert.Empty(t, got.GetLog())
 }
 
 func TestRecvResponseReturnsTheStreamError(t *testing.T) {
 	got, err := RecvResponse(&responseSource{err: errors.New("response recv closed")})
 
-	require.Nil(t, got)
-	require.EqualError(t, err, "response recv closed")
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "response recv closed")
 }
 
 func TestEvaluateReassemblesTheStreamedResponse(t *testing.T) {
@@ -178,55 +180,55 @@ func TestEvaluateReassemblesTheStreamedResponse(t *testing.T) {
 
 	got, err := Evaluate(context.Background(), fakeEvaluator{stream: stream}, testRequest(payload))
 
-	require.NoError(t, err)
-	require.Equal(t, []byte("abc"), got.GetResourceList())
-	require.Equal(t, []byte("log"), got.GetLog())
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("abc"), got.GetResourceList())
+	assert.Equal(t, []byte("log"), got.GetLog())
 	require.Len(t, stream.sent, 2)
-	require.Equal(t, streamTestRequest, stream.sent[0].GetRequestName())
-	require.Empty(t, stream.sent[1].GetRequestName())
-	require.True(t, stream.closed)
+	assert.Equal(t, streamTestRequest, stream.sent[0].GetRequestName())
+	assert.Empty(t, stream.sent[1].GetRequestName())
+	assert.True(t, stream.closed)
 }
 
 func TestEvaluateReturnsAnOpenStreamError(t *testing.T) {
 	got, err := Evaluate(context.Background(), fakeEvaluator{err: errors.New("unavailable")}, testRequest(nil))
 
-	require.Nil(t, got)
-	require.EqualError(t, err, "unavailable")
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "unavailable")
 }
 
 func TestEvaluateReturnsASendError(t *testing.T) {
 	got, err := Evaluate(context.Background(), fakeEvaluator{stream: &clientStream{sendErr: errors.New("send failed")}}, testRequest(nil))
 
-	require.Nil(t, got)
-	require.EqualError(t, err, "send failed")
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "send failed")
 }
 
 func TestEvaluateReturnsACloseError(t *testing.T) {
 	got, err := Evaluate(context.Background(), fakeEvaluator{stream: &clientStream{closeErr: errors.New("close failed")}}, testRequest(nil))
 
-	require.Nil(t, got)
-	require.EqualError(t, err, "close failed")
+	assert.Nil(t, got)
+	assert.EqualError(t, err, "close failed")
 }
 
 func TestStreamingServerEvaluatesTheReassembledRequest(t *testing.T) {
 	payload := []byte("resources")
 	sent := &requestCapture{}
-	require.NoError(t, SendRequest(sent, testRequest(payload)))
+	assert.NoError(t, SendRequest(sent, testRequest(payload)))
 	ctx := context.WithValue(context.Background(), streamCtxKey{}, "pod")
 	stream := &serverStream{ctx: ctx, incoming: sent.msgs}
 	srv := NewStreamingServer(func(gotCtx context.Context, req *EvaluateFunctionRequest) (*EvaluateFunctionResponse, error) {
-		require.Equal(t, "pod", gotCtx.Value(streamCtxKey{}))
-		require.Equal(t, payload, req.GetResourceList())
-		require.Equal(t, streamTestRequest, req.GetRequestName())
+		assert.Equal(t, "pod", gotCtx.Value(streamCtxKey{}))
+		assert.Equal(t, payload, req.GetResourceList())
+		assert.Equal(t, streamTestRequest, req.GetRequestName())
 		return &EvaluateFunctionResponse{ResourceList: []byte("out"), Log: []byte("done")}, nil
 	})
 
 	err := srv.EvaluateFunction(stream)
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	require.Len(t, stream.sent, 2)
-	require.Equal(t, []byte("out"), stream.sent[0].GetResourceList())
-	require.Equal(t, []byte("done"), stream.sent[1].GetLog())
+	assert.Equal(t, []byte("out"), stream.sent[0].GetResourceList())
+	assert.Equal(t, []byte("done"), stream.sent[1].GetLog())
 }
 
 func TestStreamingServerReturnsAReceiveError(t *testing.T) {
@@ -236,7 +238,7 @@ func TestStreamingServerReturnsAReceiveError(t *testing.T) {
 
 	err := srv.EvaluateFunction(&serverStream{recvErr: errors.New("client gone")})
 
-	require.EqualError(t, err, "client gone")
+	assert.EqualError(t, err, "client gone")
 }
 
 func TestStreamingServerReturnsTheFunctionError(t *testing.T) {
@@ -246,7 +248,7 @@ func TestStreamingServerReturnsTheFunctionError(t *testing.T) {
 
 	err := srv.EvaluateFunction(&serverStream{incoming: []*EvaluateFunctionRequest{{}}})
 
-	require.EqualError(t, err, "function failed")
+	assert.EqualError(t, err, "function failed")
 }
 
 func TestStreamingServerReturnsASendError(t *testing.T) {
@@ -259,7 +261,7 @@ func TestStreamingServerReturnsASendError(t *testing.T) {
 		sendErr:  errors.New("client closed"),
 	})
 
-	require.EqualError(t, err, "client closed")
+	assert.EqualError(t, err, "client closed")
 }
 
 func testRequest(payload []byte) *EvaluateFunctionRequest {

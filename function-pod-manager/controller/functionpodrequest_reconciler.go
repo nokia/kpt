@@ -170,11 +170,9 @@ func (r *FunctionPodRequestReconciler) startPod(
 	return ctrl.Result{RequeueAfter: r.PodPoolPolicy.PodReadyTimeout}, nil
 }
 
-const latestTag = "latest"
-
 func (r *FunctionPodRequestReconciler) resolve(ctx context.Context, repository, constraint string) (string, error) {
 	if constraint == "" {
-		return latestTag, nil
+		return fnpod.LatestTag, nil
 	}
 	tags, err := r.Provisioner.ListTags(ctx, repository)
 	if err != nil {

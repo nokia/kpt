@@ -18,7 +18,7 @@
 // - protoc             v5.29.4
 // source: evaluator.proto
 
-package evaluator
+package proto
 
 import (
 	context "context"

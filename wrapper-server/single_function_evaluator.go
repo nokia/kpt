@@ -23,7 +23,7 @@ import (
 	"os/exec"
 
 	"github.com/kptdev/kpt/api/kubeobject"
-	pb "github.com/kptdev/kpt/function-pod-manager/wrapper-server/evaluator"
+	pb "github.com/kptdev/kpt/wrapper-server/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
@@ -34,7 +34,7 @@ type SingleFunctionEvaluator struct {
 	Entrypoint []string
 }
 
-var _ pb.UnaryEvaluator = (*SingleFunctionEvaluator)(nil)
+var _ pb.UnaryEvaluator = &SingleFunctionEvaluator{}
 
 func (e *SingleFunctionEvaluator) EvaluateFunction(ctx context.Context, req *pb.EvaluateFunctionRequest) (*pb.EvaluateFunctionResponse, error) {
 	var stdout, stderr bytes.Buffer

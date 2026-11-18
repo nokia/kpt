@@ -75,4 +75,6 @@ const (
 	EventReaped = "RequestReaped"
 	// EventPodAvailable is recorded once when an existing evaluator can serve the request.
 	EventPodAvailable = "PodAvailable"
+
+	LatestTag = "latest"
 )

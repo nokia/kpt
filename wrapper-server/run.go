@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -155,10 +156,19 @@ func Run(parent context.Context, op *Options) error {
 
 	grpcCtx, cancelGRPC := context.WithCancel(ctx)
 	defer cancelGRPC()
-	addr := fmt.Sprintf(":%d", op.Port)
+	// Port 0 asks the kernel for an unused port. Record that port before the
+	// manager starts, so a claim advertises the port this process is bound to.
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", op.Port))
+	if err != nil {
+		return fmt.Errorf("listen grpc: %w", err)
+	}
+	if claims.GRPCPort == 0 {
+		claims.GRPCPort = int32(lis.Addr().(*net.TCPAddr).Port)
+	}
+	addr := lis.Addr().String()
 	grpcErr := make(chan error, 1)
 	go func() {
-		grpcErr <- ServeGRPC(grpcCtx, addr, claims, evaluator, meter)
+		grpcErr <- ServeGRPC(grpcCtx, lis, claims, evaluator, meter)
 	}()
 
 	go claims.StartCapacityWatcher(ctx)

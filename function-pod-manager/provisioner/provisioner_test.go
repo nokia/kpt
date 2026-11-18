@@ -36,7 +36,7 @@ import (
 func TestCreateEvaluatorUsesInlineTemplate(t *testing.T) {
 	ctx := context.Background()
 	kube := newFakeClient(t)
-	created, err := newTestProvisioner(kube, false).CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.2.3", nil, 0)
+	created, err := newTestProvisioner(kube, false).CreateEvaluator(ctx, "ghcr.io/example/other-fn", "v1.2.3", nil, 0)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, created.Spec.InitContainers)
@@ -49,23 +49,23 @@ func TestCreateEvaluatorUsesInlineTemplate(t *testing.T) {
 	require.NotEmpty(t, created.Spec.Containers)
 	function := created.Spec.Containers[0]
 	assert.Equal(t, fnpod.ContainerFunction, function.Name)
-	assert.Equal(t, "ghcr.io/example/merge-netconf:v1.2.3", function.Image)
+	assert.Equal(t, "ghcr.io/example/other-fn:v1.2.3", function.Image)
 	assert.Contains(t, function.Command[0], "wrapper-server")
 	assert.Contains(t, function.Args, "--port")
 	assert.Contains(t, function.Args, "/fn")
 	assert.Equal(t, "wrapper-server-tools", created.Spec.Volumes[0].Name)
 	assert.Equal(t, "v1.2.3", created.Annotations[fnpod.AnnotationResolvedVersion])
-	assert.Equal(t, "ghcr.io/example/merge-netconf", created.Annotations[fnpod.AnnotationFunctionImage])
+	assert.Equal(t, "ghcr.io/example/other-fn", created.Annotations[fnpod.AnnotationFunctionImage])
 
 	template := &corev1.PodTemplate{}
 	require.NoError(t, kube.Get(ctx, client.ObjectKey{Namespace: "fn-test", Name: fnpod.BasePodTemplateName}, template))
 	serviceTemplate := &functionconfig.ServiceTemplate{}
 	require.NoError(t, kube.Get(ctx, client.ObjectKey{Namespace: "fn-test", Name: fnpod.BaseServiceTemplateName}, serviceTemplate))
 	service := &corev1.Service{}
-	require.NoError(t, kube.Get(ctx, client.ObjectKey{Namespace: "fn-test", Name: "merge-netconf"}, service))
-	assert.Equal(t, "merge-netconf", created.Labels[fnpod.LabelImage])
-	assert.Equal(t, map[string]string{fnpod.LabelImage: "merge-netconf"}, service.Spec.Selector)
-	assert.Equal(t, "ghcr.io/example/merge-netconf:v1.2.3", envValue(function.Env, fnpod.EnvFunctionImage))
+	require.NoError(t, kube.Get(ctx, client.ObjectKey{Namespace: "fn-test", Name: "other-fn"}, service))
+	assert.Equal(t, "other-fn", created.Labels[fnpod.LabelImage])
+	assert.Equal(t, map[string]string{fnpod.LabelImage: "other-fn"}, service.Spec.Selector)
+	assert.Equal(t, "ghcr.io/example/other-fn:v1.2.3", envValue(function.Env, fnpod.EnvFunctionImage))
 	assert.Equal(t, "v1.2.3", envValue(function.Env, fnpod.EnvVersion))
 }
 
@@ -77,12 +77,12 @@ func TestCreateEvaluatorKeepsFunctionImageAfterPorchEnvOverride(t *testing.T) {
 		}}},
 	}}
 	created, err := newTestProvisioner(newFakeClient(t), false).CreateEvaluator(
-		context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", config, 0,
+		context.Background(), "ghcr.io/example/other-fn", "v1.2.3", config, 0,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "ghcr.io/example/merge-netconf:v1.2.3", envValue(created.Spec.Containers[0].Env, fnpod.EnvFunctionImage))
+	assert.Equal(t, "ghcr.io/example/other-fn:v1.2.3", envValue(created.Spec.Containers[0].Env, fnpod.EnvFunctionImage))
 	assert.NotEqual(t, fnpod.PlaceholderFunctionImage, envValue(created.Spec.Containers[0].Env, fnpod.EnvFunctionImage))
-	key, err := fnpod.ImageKey("ghcr.io/example/merge-netconf")
+	key, err := fnpod.ImageKey("ghcr.io/example/other-fn")
 	require.NoError(t, err)
 	assert.Equal(t, key, envValue(created.Spec.Containers[0].Env, fnpod.EnvImageKey))
 }
@@ -90,7 +90,7 @@ func TestCreateEvaluatorKeepsFunctionImageAfterPorchEnvOverride(t *testing.T) {
 func TestCreateEvaluatorAddsImagePullSecret(t *testing.T) {
 	kube := newFakeClient(t)
 	prov := newTestProvisioner(kube, true)
-	created, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", nil, 0)
+	created, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/other-fn", "v1.2.3", nil, 0)
 	require.NoError(t, err)
 	require.Len(t, created.Spec.ImagePullSecrets, 1)
 	assert.Equal(t, "auth-secret", created.Spec.ImagePullSecrets[0].Name)
@@ -106,26 +106,26 @@ func TestCreateEvaluatorReusesTheServiceAndAppliesOverrides(t *testing.T) {
 		SecurityContext:    &corev1.PodSecurityContext{RunAsUser: &runAs},
 	}}
 
-	first, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.2.3", config, 0)
+	first, err := prov.CreateEvaluator(ctx, "ghcr.io/example/other-fn", "v1.2.3", config, 0)
 	require.NoError(t, err)
-	second, err := prov.CreateEvaluator(ctx, "ghcr.io/example/merge-netconf", "v1.0.0", config, 1)
+	second, err := prov.CreateEvaluator(ctx, "ghcr.io/example/other-fn", "v1.0.0", config, 1)
 	require.NoError(t, err)
 
 	assert.Equal(t, "function", first.Spec.ServiceAccountName)
-	assert.Equal(t, "merge-netconf", first.Labels[fnpod.LabelImage])
+	assert.Equal(t, "other-fn", first.Labels[fnpod.LabelImage])
 	assert.Equal(t, first.Labels[fnpod.LabelImage], second.Labels[fnpod.LabelImage])
 	assert.NotEqual(t, first.GenerateName, second.GenerateName)
 	services := &corev1.ServiceList{}
 	require.NoError(t, kube.List(ctx, services, client.InNamespace("fn-test")))
 	assert.Len(t, services.Items, 1)
-	assert.Equal(t, "merge-netconf", services.Items[0].Name)
+	assert.Equal(t, "other-fn", services.Items[0].Name)
 }
 
 func TestCreateEvaluatorRejectsAnEmptyWrapperImage(t *testing.T) {
 	prov := newTestProvisioner(newFakeClient(t), false)
 	prov.cfg.WrapperServerImage = ""
 
-	_, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", nil, 0)
+	_, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/other-fn", "v1.2.3", nil, 0)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, fnpod.WrapperServerImageEnv)
@@ -136,7 +136,7 @@ func TestCreateEvaluatorReportsRegistryAndImageErrors(t *testing.T) {
 	prov := newTestProvisioner(kube, false)
 	prov.cfg.ImageRegistry = &FakeImageRegistry{Err: assert.AnError}
 
-	_, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", nil, 0)
+	_, err := prov.CreateEvaluator(context.Background(), "ghcr.io/example/other-fn", "v1.2.3", nil, 0)
 	require.ErrorIs(t, err, assert.AnError)
 
 	prov.cfg.ImageRegistry = &FakeImageRegistry{Digest: "abc"}
@@ -158,11 +158,11 @@ func TestWarmupSkipsAConstraintAndAnExistingPod(t *testing.T) {
 	prov := newTestProvisioner(kube, false)
 	require.NoError(t, prov.Warmup(ctx, nil, nil))
 	require.NoError(t, prov.Warmup(ctx, &functionconfig.FunctionConfig{
-		Spec: functionconfig.FunctionConfigSpec{Image: "merge-netconf", PodExecutor: &functionconfig.PodExecutorConfig{Tags: []string{"~1.0.0"}}},
+		Spec: functionconfig.FunctionConfigSpec{Image: "other-fn", PodExecutor: &functionconfig.PodExecutorConfig{Tags: []string{"~1.0.0"}}},
 	}, nil))
 
 	cfg := &functionconfig.FunctionConfig{Spec: functionconfig.FunctionConfigSpec{
-		Image:       "merge-netconf",
+		Image:       "other-fn",
 		PodExecutor: &functionconfig.PodExecutorConfig{Tags: []string{"v1.2.3"}},
 	}}
 	require.NoError(t, prov.Warmup(ctx, cfg, nil))
@@ -184,7 +184,7 @@ func TestCreateEvaluatorReportsATemplateWithoutAFunctionContainer(t *testing.T) 
 		}},
 	}))
 
-	_, err := newTestProvisioner(kube, false).CreateEvaluator(context.Background(), "ghcr.io/example/merge-netconf", "v1.2.3", nil, 0)
+	_, err := newTestProvisioner(kube, false).CreateEvaluator(context.Background(), "ghcr.io/example/other-fn", "v1.2.3", nil, 0)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, fnpod.ContainerFunction)
@@ -203,7 +203,7 @@ func TestNextPodIndexReusesTheLowestFreeNumber(t *testing.T) {
 	assert.Equal(t, 2, NextPodIndex([]corev1.Pod{pod("1", "a"), pod("3", "c")}))
 	assert.Equal(t, 3, NextPodIndex([]corev1.Pod{pod("1", "a"), pod("2", "b")}))
 	assert.Equal(t, 1, NextPodIndex([]corev1.Pod{{ObjectMeta: metav1.ObjectMeta{
-		Name: "merge-netconf-v123-2-01234567-abcde",
+		Name: "other-fn-v123-2-01234567-abcde",
 	}}}))
 }
 
