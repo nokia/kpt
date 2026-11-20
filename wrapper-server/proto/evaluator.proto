@@ -1,0 +1,73 @@
+// Copyright 2022 The kpt and Nephio Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package evaluator;
+
+option go_package = "github.com/kptdev/kpt/wrapper-server/proto";
+
+// Evaluator of kpt functions
+service FunctionEvaluator {
+  // Evaluates a kpt function on the provided package.
+  //
+  // The request and the response are streamed so that arbitrarily large
+  // packages can be processed without configuring a maximum gRPC message
+  // size. The client sends the request as a sequence of messages (chunking
+  // the resource_list) and then half-closes the stream; the server replies
+  // with a sequence of messages (chunking resource_list and log). Reassembly
+  // is done by concatenating the respective byte fields in receive order.
+  rpc EvaluateFunction(stream EvaluateFunctionRequest)
+      returns (stream EvaluateFunctionResponse) {}
+}
+
+message EvaluateFunctionRequest {
+  // A chunk of the serialized ResourceList
+  // (https://kpt.dev/reference/schema/resource-list/). The full ResourceList
+  // is obtained by concatenating the resource_list field of every message in
+  // the request stream in the order they are received.
+  bytes resource_list = 1;
+
+  // kpt image identifying the function to evaluate.
+  // Only set on the first message of the stream.
+  string image = 2;
+
+  // Tag is an optional field for specifying/overriding the tag of the function image.
+  // Can be a semver constraint satisfying this spec: .
+  // Only set on the first message of the stream.
+  string Tag = 3;
+
+  // exec_path is the path of the executable to run when an executable runner
+  // is available for this function. If empty, the executable runner is skipped.
+  // Only set on the first message of the stream.
+  string exec_path = 4;
+
+  // request_name is the metadata.name of the kpt.dev/v1alpha1 FunctionPodRequest
+  // that this evaluation is bound to. Only set on the first message of the stream.
+  string request_name = 5;
+}
+
+message EvaluateFunctionResponse {
+  // A chunk of the serialized ResourceList
+  // (https://kpt.dev/reference/schema/resource-list/), including structured
+  // function results. The full ResourceList is obtained by concatenating the
+  // resource_list field of every message in the response stream in receive
+  // order.
+  bytes resource_list = 1;
+
+  // A chunk of the additional log produced by the function (if any). The full
+  // log is obtained by concatenating the log field of every message in the
+  // response stream in receive order.
+  bytes log = 2;
+}

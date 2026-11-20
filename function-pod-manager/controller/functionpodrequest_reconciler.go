@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kptdev/kpt/api/utils/image"
@@ -105,6 +106,9 @@ func (r *FunctionPodRequestReconciler) reconcile(
 	if done, err := r.reapOne(ctx, request, pods, now); done || err != nil {
 		return ctrl.Result{}, err
 	}
+	if err := r.prepareForClaim(ctx, request); err != nil {
+		return ctrl.Result{}, err
+	}
 	phase := phaseOf(request)
 	if phase != v1alpha1.FunctionPodRequestPhaseCreated {
 		return ctrl.Result{RequeueAfter: r.untilDeadline(request, now)}, nil
@@ -141,12 +145,13 @@ func (r *FunctionPodRequestReconciler) startPod(
 	pods []corev1.Pod,
 ) (ctrl.Result, error) {
 	version := result.version
+	constraint := fnpod.GetVersionConstraint(request.Spec.VersionConstraint, request.Spec.Image)
 	if version == "" {
 		var err error
-		version, err = r.resolve(ctx, result.repository, request.Spec.VersionConstraint)
+		version, err = r.resolve(ctx, result.repository, constraint)
 		if err != nil {
 			if errors.Is(err, util.ErrNoMatchingTag) {
-				return ctrl.Result{}, r.failConstraint(ctx, request, result.repository, request.Spec.VersionConstraint)
+				return ctrl.Result{}, r.failConstraint(ctx, request, result.repository, constraint)
 			}
 			r.event(request, corev1.EventTypeWarning, fnpod.EventStartFailed, "Failed to start new pod: "+err.Error())
 			return ctrl.Result{}, r.writeError(ctx, request, v1alpha1.FunctionPodRequestPhasePodManagementError, err.Error())
@@ -168,8 +173,15 @@ func (r *FunctionPodRequestReconciler) startPod(
 }
 
 func (r *FunctionPodRequestReconciler) resolve(ctx context.Context, repository, constraint string) (string, error) {
+	constraint = strings.TrimSpace(constraint)
 	if constraint == "" {
-		return "latest", nil
+		return "", fmt.Errorf("%w: (empty)", util.ErrNoMatchingTag)
+	}
+	if constraint == fnpod.LatestTag {
+		return fnpod.LatestTag, nil
+	}
+	if util.ConcreteVersion(constraint) {
+		return constraint, nil
 	}
 	tags, err := r.Provisioner.ListTags(ctx, repository)
 	if err != nil {

@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kptdev/kpt/api/utils/image"
@@ -22,6 +23,7 @@ import (
 	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 )
 
 type scaleAction int
@@ -53,19 +55,21 @@ type scaler struct {
 
 func (s scaler) scale() scaleResult {
 	repository := repositoryOf(s.request.Spec.Image, s.prefix)
+	constraint := fnpod.GetVersionConstraint(s.request.Spec.VersionConstraint, s.request.Spec.Image)
 	related := podsForRepository(s.pods, repository)
 	healthy, failed := splitPods(related, s.now, s.defaults.PodReadyTimeout)
-	satisfying := podsSatisfying(healthy, s.request.Spec.VersionConstraint)
+	satisfying := podsSatisfying(healthy, constraint)
 	if len(satisfying) > 0 {
 		return s.existing(satisfying, healthy, repository)
 	}
-	if failedPod, message, ok := failedSatisfying(failed, s.request.Spec.VersionConstraint, s.now, s.defaults.PodReadyTimeout); ok {
+	if failedPod, message, ok := failedSatisfying(failed, constraint, s.now, s.defaults.PodReadyTimeout); ok {
 		return scaleResult{action: scalePodFailed, repository: repository, message: message, pod: failedPod}
 	}
-	if s.request.Spec.VersionConstraint == "" {
+	// No tag on the image and no spec.versionConstraint: provision the catalog default (latest).
+	if constraint == "" {
 		version := image.Parse(image.WithPrefix(s.request.Spec.Image, s.prefix)).Tag
 		if version == "" {
-			version = "latest"
+			version = fnpod.LatestTag
 		}
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
@@ -73,14 +77,30 @@ func (s scaler) scale() scaleResult {
 }
 
 func (s scaler) existing(satisfying, healthy []corev1.Pod, repository string) scaleResult {
+	// Prefer the highest semver. A tag such as "latest" is still a concrete version the
+	// next pod must repeat; dropping it skips scale-up and leaves a single evaluator.
 	version := util.HighestVersion(versionsOf(satisfying))
+	if version == "" {
+		version = firstVersion(satisfying)
+	}
 	matched := &satisfying[0]
 	if version == "" {
 		return scaleResult{action: scaleNone, repository: repository, pod: matched}
 	}
 	podPoolPolicy := s.configs.getPodPoolPolicy(repository, version, s.prefix, s.defaults)
 	pending := pendingAgainst(s.requests, satisfying, repository, s.prefix)
-	if pending > podPoolPolicy.PreferredMaxQueueLength && len(healthy) < podPoolPolicy.MaxParallelExecutions {
+	create := pending > podPoolPolicy.PreferredMaxQueueLength && len(healthy) < podPoolPolicy.MaxParallelExecutions
+	klog.InfoS("evaluator scale",
+		"request", s.request.Name,
+		"repository", repository,
+		"version", version,
+		"pending", pending,
+		"preferredQueue", podPoolPolicy.PreferredMaxQueueLength,
+		"healthy", len(healthy),
+		"maxParallel", podPoolPolicy.MaxParallelExecutions,
+		"create", create,
+	)
+	if create {
 		return scaleResult{action: scaleCreatePod, repository: repository, version: version}
 	}
 	return scaleResult{action: scaleNone, repository: repository, pod: matched}
@@ -97,10 +117,17 @@ func splitPods(pods []corev1.Pod, now time.Time, timeout time.Duration) (healthy
 	return healthy, failed
 }
 
+func constraintMatchesPod(concreteVersion, constraint string) bool {
+	if strings.TrimSpace(constraint) == "" {
+		return strings.TrimSpace(concreteVersion) != ""
+	}
+	return fnpod.VersionSatisfies(concreteVersion, constraint)
+}
+
 func failedSatisfying(failed []corev1.Pod, constraint string, now time.Time, timeout time.Duration) (*corev1.Pod, string, bool) {
 	var chosen *corev1.Pod
 	for i := range failed {
-		if !util.VersionSatisfies(failed[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
+		if !constraintMatchesPod(failed[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
 			continue
 		}
 		if chosen == nil || failed[i].CreationTimestamp.After(chosen.CreationTimestamp.Time) {
@@ -130,11 +157,20 @@ func podsForRepository(pods []corev1.Pod, repository string) []corev1.Pod {
 func podsSatisfying(pods []corev1.Pod, constraint string) []corev1.Pod {
 	var out []corev1.Pod
 	for i := range pods {
-		if util.VersionSatisfies(pods[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
+		if constraintMatchesPod(pods[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
 			out = append(out, pods[i])
 		}
 	}
 	return out
+}
+
+func firstVersion(pods []corev1.Pod) string {
+	for i := range pods {
+		if version := pods[i].Annotations[fnpod.AnnotationResolvedVersion]; version != "" {
+			return version
+		}
+	}
+	return ""
 }
 
 func versionsOf(pods []corev1.Pod) []string {
@@ -154,7 +190,8 @@ func pendingAgainst(requests []v1alpha1.FunctionPodRequest, satisfying []corev1.
 		if repositoryOf(requests[i].Spec.Image, prefix) != repository {
 			continue
 		}
-		if len(podsSatisfying(satisfying, requests[i].Spec.VersionConstraint)) > 0 {
+		other := fnpod.GetVersionConstraint(requests[i].Spec.VersionConstraint, requests[i].Spec.Image)
+		if len(podsSatisfying(satisfying, other)) > 0 {
 			pending++
 		}
 	}

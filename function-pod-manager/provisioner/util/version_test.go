@@ -17,6 +17,7 @@ package util
 import (
 	"testing"
 
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,8 +33,8 @@ func TestSelectTagPicksHighestPrefixedVersion(t *testing.T) {
 
 	_, err = SelectTag([]string{"v1.0.7"}, "~9.0.0")
 	require.ErrorIs(t, err, ErrNoMatchingTag)
-	assert.True(t, VersionSatisfies("v1.0.7", "~1.0.3"))
-	assert.False(t, VersionSatisfies("v1.0.7", "~1.1.0"))
+	assert.True(t, fnpod.VersionSatisfies("v1.0.7", "~1.0.3"))
+	assert.False(t, fnpod.VersionSatisfies("v1.0.7", "~1.1.0"))
 	assert.True(t, ConcreteVersion("v1.2.3"))
 	assert.False(t, ConcreteVersion("~1.0.3"))
 }

@@ -16,7 +16,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/kptdev/kpt/function-pod-manager/api/functionpodrequest/v1alpha1"
+	"github.com/kptdev/kpt/function-pod-manager/fnpod"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,6 +60,16 @@ func (r *FunctionConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 	r.Store.upsert(cfg)
+	if cfg.Status.ControllerObservedGeneration != cfg.Generation {
+		before := cfg.DeepCopy()
+		cfg.Status.ControllerObservedGeneration = cfg.Generation
+		if cfg.Status.Error != "" {
+			cfg.Status.Error = ""
+		}
+		if err := r.Status().Patch(ctx, cfg, client.MergeFrom(before)); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 	if !r.Warmup {
 		return ctrl.Result{}, nil
 	}
@@ -65,4 +78,30 @@ func (r *FunctionConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, r.Pods.Provisioner.Warmup(ctx, cfg, pods)
+}
+
+// prepareForClaim stamps the image-key the evaluator informer selects on, and records Created
+// when the client left status.phase empty. The wrapper cache ignores unlabeled requests.
+func (r *FunctionPodRequestReconciler) prepareForClaim(ctx context.Context, request *v1alpha1.FunctionPodRequest) error {
+	repository := repositoryOf(request.Spec.Image, r.ImagePrefix)
+	key, err := fnpod.ImageKey(repository)
+	if err != nil {
+		return fmt.Errorf("image key for %s: %w", request.Name, err)
+	}
+	if request.Labels == nil || request.Labels[fnpod.LabelImageKey] != key {
+		if request.Labels == nil {
+			request.Labels = map[string]string{}
+		}
+		request.Labels[fnpod.LabelImageKey] = key
+		if err := r.Update(ctx, request); err != nil {
+			return fmt.Errorf("label %s on %s: %w", fnpod.LabelImageKey, request.Name, err)
+		}
+	}
+	if request.Status.Phase == "" {
+		request.Status.Phase = v1alpha1.FunctionPodRequestPhaseCreated
+		if err := r.Status().Update(ctx, request); err != nil {
+			return fmt.Errorf("set Created on %s: %w", request.Name, err)
+		}
+	}
+	return nil
 }

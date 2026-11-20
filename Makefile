@@ -20,11 +20,12 @@ include ./make/testing.mk
 include ./make/api.mk
 include ./make/cli.mk
 include ./make/function-pod-manager.mk
+include ./make/wrapper-server.mk
 include ./make/checks.mk
 
 all: fix vet fmt lint test build tidy
 
-build: cli/build function-pod-manager/build
+build: cli/build function-pod-manager/build wrapper-server/build
 
 update-deps-to-head:
 	go get sigs.k8s.io/cli-utils@master

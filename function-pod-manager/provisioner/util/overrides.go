@@ -97,10 +97,30 @@ func setEnv(env *[]corev1.EnvVar, name, value string) {
 	for i := range *env {
 		if (*env)[i].Name == name {
 			(*env)[i].Value = value
+			(*env)[i].ValueFrom = nil
 			return
 		}
 	}
 	*env = append(*env, corev1.EnvVar{Name: name, Value: value})
+}
+
+// ApplyEvaluatorEnv records the concrete function identity after template overrides.
+// Porch's base template sets FUNCTION_IMAGE to a placeholder and may replace the whole env list.
+func ApplyEvaluatorEnv(pod *corev1.PodTemplateSpec, image, repository, version, imageKey, imagePrefix string) {
+	for i := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[i]
+		if container.Name != fnpod.ContainerFunction {
+			continue
+		}
+		setEnv(&container.Env, fnpod.EnvFunctionImage, image)
+		setEnv(&container.Env, fnpod.EnvFunctionRepository, repository)
+		setEnv(&container.Env, fnpod.EnvVersion, version)
+		setEnv(&container.Env, fnpod.EnvImageKey, imageKey)
+		if imagePrefix != "" {
+			setEnv(&container.Env, fnpod.EnvDefaultImagePrefix, imagePrefix)
+		}
+		return
+	}
 }
 
 func PatchFunctionContainer(pod *corev1.PodTemplateSpec, entrypoint []string, image string) error {

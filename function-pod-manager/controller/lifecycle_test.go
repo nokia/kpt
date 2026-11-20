@@ -150,6 +150,10 @@ func TestFunctionConfigReconcileWarmsAConcreteTag(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"v1.2.3"}, versions(t, kube))
+
+	got := &functionconfig.FunctionConfig{}
+	require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: cfg.Name}, got))
+	assert.Equal(t, got.Generation, got.Status.ControllerObservedGeneration)
 }
 
 func TestFunctionConfigReconcileSkipsWhenWarmupIsOffOrTheObjectIsGone(t *testing.T) {

@@ -14,7 +14,7 @@
 
 # name:directory. lib is the root module; its directory is "." so the target
 # name is not derived from a folder. mdtogo is intentionally absent.
-CHECK_MODULES := lib:. api:api cli:cli function-pod-manager:function-pod-manager
+CHECK_MODULES := lib:. api:api cli:cli function-pod-manager:function-pod-manager wrapper-server:wrapper-server
 CHECK_TASKS   := fix fmt vet lint test tidy
 
 module_name = $(word 1,$(subst :, ,$(1)))
@@ -51,10 +51,11 @@ fix fmt vet lint test tidy:
 	$(MAKE) api/$@
 	$(MAKE) cli/$@
 	$(MAKE) function-pod-manager/$@
+	$(MAKE) wrapper-server/$@
 
-.PHONY: lib api cli function-pod-manager
+.PHONY: lib api cli function-pod-manager wrapper-server
 # lib is what the vX.Y.Z tag workflow runs. It does not build the CLI.
-lib api cli function-pod-manager:
+lib api cli function-pod-manager wrapper-server:
 	$(MAKE) $@/fix
 	$(MAKE) $@/vet
 	$(MAKE) $@/fmt
