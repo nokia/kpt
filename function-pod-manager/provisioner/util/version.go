@@ -27,23 +27,6 @@ import (
 // ErrNoMatchingTag means no published tag satisfies the constraint.
 var ErrNoMatchingTag = errors.New("no published tag satisfies the constraint")
 
-// VersionSatisfies reports whether a concrete pod version satisfies a request constraint.
-// An empty constraint matches every version.
-func VersionSatisfies(version, constraint string) bool {
-	if constraint == "" {
-		return true
-	}
-	c, err := semver.NewConstraint(constraint)
-	if err != nil {
-		return false
-	}
-	parsed, err := semver.NewVersion(version)
-	if err != nil {
-		return false
-	}
-	return c.Check(parsed)
-}
-
 // ConcreteVersion reports whether tag is a single semver version rather than a range.
 func ConcreteVersion(tag string) bool {
 	_, err := semver.NewVersion(tag)

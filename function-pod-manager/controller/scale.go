@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kptdev/kpt/api/utils/image"
@@ -54,16 +55,18 @@ type scaler struct {
 
 func (s scaler) scale() scaleResult {
 	repository := repositoryOf(s.request.Spec.Image, s.prefix)
+	constraint := fnpod.GetVersionConstraint(s.request.Spec.VersionConstraint, s.request.Spec.Image)
 	related := podsForRepository(s.pods, repository)
 	healthy, failed := splitPods(related, s.now, s.defaults.PodReadyTimeout)
-	satisfying := podsSatisfying(healthy, s.request.Spec.VersionConstraint)
+	satisfying := podsSatisfying(healthy, constraint)
 	if len(satisfying) > 0 {
 		return s.existing(satisfying, healthy, repository)
 	}
-	if failedPod, message, ok := failedSatisfying(failed, s.request.Spec.VersionConstraint, s.now, s.defaults.PodReadyTimeout); ok {
+	if failedPod, message, ok := failedSatisfying(failed, constraint, s.now, s.defaults.PodReadyTimeout); ok {
 		return scaleResult{action: scalePodFailed, repository: repository, message: message, pod: failedPod}
 	}
-	if s.request.Spec.VersionConstraint == "" {
+	// No tag on the image and no spec.versionConstraint: provision the catalog default (latest).
+	if constraint == "" {
 		version := image.Parse(image.WithPrefix(s.request.Spec.Image, s.prefix)).Tag
 		if version == "" {
 			version = fnpod.LatestTag
@@ -114,10 +117,17 @@ func splitPods(pods []corev1.Pod, now time.Time, timeout time.Duration) (healthy
 	return healthy, failed
 }
 
+func constraintMatchesPod(concreteVersion, constraint string) bool {
+	if strings.TrimSpace(constraint) == "" {
+		return strings.TrimSpace(concreteVersion) != ""
+	}
+	return fnpod.VersionSatisfies(concreteVersion, constraint)
+}
+
 func failedSatisfying(failed []corev1.Pod, constraint string, now time.Time, timeout time.Duration) (*corev1.Pod, string, bool) {
 	var chosen *corev1.Pod
 	for i := range failed {
-		if !util.VersionSatisfies(failed[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
+		if !constraintMatchesPod(failed[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
 			continue
 		}
 		if chosen == nil || failed[i].CreationTimestamp.After(chosen.CreationTimestamp.Time) {
@@ -147,7 +157,7 @@ func podsForRepository(pods []corev1.Pod, repository string) []corev1.Pod {
 func podsSatisfying(pods []corev1.Pod, constraint string) []corev1.Pod {
 	var out []corev1.Pod
 	for i := range pods {
-		if util.VersionSatisfies(pods[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
+		if constraintMatchesPod(pods[i].Annotations[fnpod.AnnotationResolvedVersion], constraint) {
 			out = append(out, pods[i])
 		}
 	}
@@ -180,7 +190,8 @@ func pendingAgainst(requests []v1alpha1.FunctionPodRequest, satisfying []corev1.
 		if repositoryOf(requests[i].Spec.Image, prefix) != repository {
 			continue
 		}
-		if len(podsSatisfying(satisfying, requests[i].Spec.VersionConstraint)) > 0 {
+		other := fnpod.GetVersionConstraint(requests[i].Spec.VersionConstraint, requests[i].Spec.Image)
+		if len(podsSatisfying(satisfying, other)) > 0 {
 			pending++
 		}
 	}

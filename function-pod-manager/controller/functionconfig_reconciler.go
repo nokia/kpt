@@ -60,6 +60,16 @@ func (r *FunctionConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 	r.Store.upsert(cfg)
+	if cfg.Status.ControllerObservedGeneration != cfg.Generation {
+		before := cfg.DeepCopy()
+		cfg.Status.ControllerObservedGeneration = cfg.Generation
+		if cfg.Status.Error != "" {
+			cfg.Status.Error = ""
+		}
+		if err := r.Status().Patch(ctx, cfg, client.MergeFrom(before)); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 	if !r.Warmup {
 		return ctrl.Result{}, nil
 	}

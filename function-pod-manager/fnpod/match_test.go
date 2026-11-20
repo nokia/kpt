@@ -22,6 +22,15 @@ import (
 
 func TestVersionSatisfiesExactCatalogTag(t *testing.T) {
 	assert.True(t, VersionSatisfies("v0.1.5", "v0.1.5"))
-	assert.True(t, VersionSatisfies("v0.1.5", ""))
+	assert.False(t, VersionSatisfies("v0.1.5", ""))
 	assert.False(t, VersionSatisfies("v0.1.5", "~2.0.0"))
+	assert.True(t, VersionSatisfies(LatestTag, LatestTag))
+}
+
+func TestGetVersionConstraint(t *testing.T) {
+	assert.Equal(t, "~1.0.0", GetVersionConstraint("~1.0.0", "registry/sleep:latest"))
+	assert.Equal(t, LatestTag, GetVersionConstraint("", "registry/sleep:latest"))
+	assert.Equal(t, "v1.2.3", GetVersionConstraint("", "registry/sleep:v1.2.3"))
+	assert.Empty(t, GetVersionConstraint("", "registry/sleep"))
+	assert.Empty(t, GetVersionConstraint("", "registry/sleep@sha256:abc"))
 }

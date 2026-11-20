@@ -257,8 +257,9 @@ func (c *ClaimController) skipReason(req *fnreqv1alpha1.FunctionPodRequest, now 
 	if base := fnpod.ImageBaseName(req.Spec.Image); base != c.FunctionBaseName {
 		return fmt.Sprintf("image base %q != pod %q", base, c.FunctionBaseName)
 	}
-	if !fnpod.VersionSatisfies(c.ResolvedVersion, req.Spec.VersionConstraint) {
-		return fmt.Sprintf("pod version %q does not satisfy %q", c.ResolvedVersion, req.Spec.VersionConstraint)
+	constraint := fnpod.GetVersionConstraint(req.Spec.VersionConstraint, req.Spec.Image)
+	if !fnpod.VersionSatisfies(c.ResolvedVersion, constraint) {
+		return fmt.Sprintf("pod version %q does not satisfy %q", c.ResolvedVersion, constraint)
 	}
 	return ""
 }

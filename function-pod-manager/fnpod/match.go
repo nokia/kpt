@@ -42,9 +42,40 @@ func ImageBaseName(imageRef string) string {
 	return last
 }
 
-// VersionSatisfies reports whether concreteVersion satisfies the request constraint (empty matches all).
+// imageTag returns an explicitly specified tag (for example from :latest), not an implicit default.
+func imageTag(imageRef string) string {
+	ref := strings.TrimSpace(imageRef)
+	if ref == "" {
+		return ""
+	}
+	if i := strings.Index(ref, "@"); i >= 0 {
+		ref = ref[:i]
+	}
+	slash := strings.LastIndex(ref, "/")
+	colon := strings.LastIndex(ref, ":")
+	if colon <= slash {
+		return ""
+	}
+	return strings.TrimSpace(ref[colon+1:])
+}
+
+// GetVersionConstraint is the constraint used for matching and provisioning.
+// storedConstraint is spec.versionConstraint (Kptfile Function.tag when set by porch).
+// When it is empty, a tag on imageRef (for example :latest) becomes the constraint.
+func GetVersionConstraint(storedConstraint, imageRef string) string {
+	if t := strings.TrimSpace(storedConstraint); t != "" {
+		return t
+	}
+	return imageTag(imageRef)
+}
+
+// VersionSatisfies reports whether concreteVersion satisfies the request constraint.
+// An empty constraint never matches.
 func VersionSatisfies(concreteVersion, constraint string) bool {
-	if constraint == "" || concreteVersion == constraint {
+	if constraint == "" {
+		return false
+	}
+	if concreteVersion == constraint {
 		return true
 	}
 	c, err := semver.NewConstraint(constraint)

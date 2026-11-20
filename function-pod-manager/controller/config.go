@@ -15,8 +15,10 @@
 package controller
 
 import (
+	"strings"
 	"sync"
 
+	"github.com/kptdev/kpt/api/utils/image"
 	"github.com/kptdev/kpt/function-pod-manager/provisioner/util"
 	functionconfig "github.com/kptdev/porch/api/porchconfig/v1alpha1"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,9 +33,10 @@ type FunctionConfigStore struct {
 }
 
 type cachedFunctionConfig struct {
-	key    types.NamespacedName
-	image  string
-	config *functionconfig.PodExecutorConfig
+	key      types.NamespacedName
+	image    string
+	prefixes []string
+	config   *functionconfig.PodExecutorConfig
 }
 
 // NewFunctionConfigStore returns an empty store. synced is false until the first sync.
@@ -122,7 +125,7 @@ func (s *FunctionConfigStore) executor(repository, version, prefix string) *func
 	var wildcard *functionconfig.PodExecutorConfig
 	for i := range s.items {
 		config := s.items[i].config
-		if config == nil || repositoryOf(s.items[i].image, prefix) != repository {
+		if config == nil || !repositoryMatchesFunction(s.items[i], repository, prefix) {
 			continue
 		}
 		if util.TagsMatch(version, config.Tags) {
@@ -163,11 +166,39 @@ func cachedFrom(obj *functionconfig.FunctionConfig) cachedFunctionConfig {
 	if obj.Spec.PodExecutor != nil {
 		config = obj.Spec.PodExecutor.DeepCopy()
 	}
+	prefixes := append([]string(nil), obj.Spec.Prefixes...)
 	return cachedFunctionConfig{
-		key:    types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name},
-		image:  obj.Spec.Image,
-		config: config,
+		key:      types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name},
+		image:    obj.Spec.Image,
+		prefixes: prefixes,
+		config:   config,
 	}
+}
+
+// repositoryMatchesFunction reports whether repository is this FunctionConfig's function image
+// (same rules as porch binary/go executor cache: spec.image base name + spec.prefixes).
+func repositoryMatchesFunction(item cachedFunctionConfig, repository, defaultPrefix string) bool {
+	if repositoryOf(item.image, defaultPrefix) == repository {
+		return true
+	}
+	parsed := image.Parse(repository)
+	if parsed.BaseName != item.image {
+		return false
+	}
+	prefixes := item.prefixes
+	if len(prefixes) == 0 {
+		prefixes = []string{""}
+	}
+	wantPrefix := strings.TrimRight(parsed.Prefix(), "/")
+	for _, p := range prefixes {
+		if p == "" {
+			p = defaultPrefix
+		}
+		if strings.TrimRight(p, "/") == wantPrefix {
+			return true
+		}
+	}
+	return false
 }
 
 func containsStar(tags []string) bool {
