@@ -166,11 +166,10 @@ func cachedFrom(obj *functionconfig.FunctionConfig) cachedFunctionConfig {
 	if obj.Spec.PodExecutor != nil {
 		config = obj.Spec.PodExecutor.DeepCopy()
 	}
-	prefixes := append([]string(nil), obj.Spec.Prefixes...)
 	return cachedFunctionConfig{
 		key:      types.NamespacedName{Namespace: obj.Namespace, Name: obj.Name},
 		image:    obj.Spec.Image,
-		prefixes: prefixes,
+		prefixes: obj.Spec.Prefixes,
 		config:   config,
 	}
 }
